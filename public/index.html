@@ -239,7 +239,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .pop .none{padding:12px;color:var(--muted);font-size:15px}
 .pop .sel-head{padding:10px 12px 4px;font-size:15px;font-weight:600}
 .pop .sel-sub{padding:0 12px 10px;font-size:13px;color:var(--muted)}
-.pop .opts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 6px 6px}
+.pop .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 6px 6px}
 .pop .opts button{flex-direction:column;align-items:center;gap:0;text-align:center;border:1px solid var(--line);padding:10px 6px}
 .pop .opts button small{color:var(--muted);font-size:12px}
 .pop .custom{display:flex;gap:8px;align-items:center;padding:8px 6px 6px;border-top:1px solid var(--line-soft);margin-top:4px}
@@ -337,7 +337,8 @@ const esc = s => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;"
 const rid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const $ = (s,el=document) => el.querySelector(s);
 const fmtD = n => { if(!n) return "0"; const r = Math.round(n*100)/100; return r%1===0 ? r.toFixed(0) : String(r); };
-const frac = v => v===0.25?"¼":v===0.5?"½":v===0.75?"¾":v===1?"1":`${fmtD(v*HOURS_PER_DAY)}h`;
+const frac = v => fmtD(v);
+const LEAD_PREFILL = 0.25;
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.setAttribute("role","status"); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3000); }
 const tint = (c, pct) => `color-mix(in srgb, ${c} ${pct}%, #ffffff)`;
 function nextColor(){ const used = Object.values(S.projects).map(p=>(p.color||"").toUpperCase()); return PALETTE.find(c=>!used.includes(c)) || PALETTE[Object.keys(S.projects).length % PALETTE.length]; }
@@ -631,9 +632,16 @@ $("#overlay").addEventListener("click", e => {
     const lv = $("#f-lead").value;
     if(lv==="__new"){ const nm=$("#f-newlead").value.trim(); if(!nm){ toast("Type the new person's name."); $("#f-newlead").focus(); return; } const pid=rid(); put("people", pid, {name:nm}); p.leadId=pid; }
     else p.leadId = lv;
-    const id = ed.id || rid();
+    const id = ed.id || rid(); const prevLead = ed.id ? S.projects[ed.id]?.leadId : "";
     closeOverlay();
     put("projects", id, {name:p.name,start:p.start,end:p.end,scope:p.scope||"",leadId:p.leadId||"",markets:p.markets||[],color:p.color||nextColor(),ultra:!!p.ultra});
+    // A new lead starts with a quarter day on every weekday of the project, skipping their holidays.
+    const lk = `${p.leadId}__${id}`;
+    if(p.leadId && p.leadId!==prevLead && !S.allocs[lk]){
+      const days = {};
+      for(let d=p.start; d<=p.end; d=add(d,1)) if(![0,6].includes(dow(d)) && !holidayOn(d, p.leadId)) days[d]=LEAD_PREFILL;
+      put("allocs", lk, {personId:p.leadId, projectId:id, days});
+    }
     toast("Saved");
   }
   else if(a==="pdel"){
@@ -779,9 +787,7 @@ function openAllocPop(p, j, dates, anchor){
     <div class="sel-head">${esc(S.people[p]?.name||"")} · ${esc(pr.name)}</div>
     <div class="sel-sub">${range} · ${n} day${n>1?"s":""}${outN?` (${outN} outside project dates)`:""}</div>
     <div class="opts">
-      <button data-amt="0.25">¼ day<small>${HOURS_PER_DAY/4}h</small></button>
-      <button data-amt="0.5">½ day<small>${HOURS_PER_DAY/2}h</small></button>
-      <button data-amt="1">Full day<small>${HOURS_PER_DAY}h</small></button>
+      ${[0.25,0.5,0.75,1].map(v=>`<button data-amt="${v}">${v}<small>${fmtD(v*HOURS_PER_DAY)}h</small></button>`).join("")}
     </div>
     <form class="custom" id="alloc-custom"><input class="input" id="alloc-hours" type="number" min="0" max="24" step="0.25" value="${curH}" placeholder="Hours" aria-label="Hours per day"><span>hours per day</span><button class="btn dark small" type="submit">Set</button></form>
     <button class="clear" data-amt="0">Clear these days</button>
