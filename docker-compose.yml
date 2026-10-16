@@ -10,11 +10,20 @@ services:
     environment:
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD}
       SESSION_DAYS: ${SESSION_DAYS:-30}
-      SECURE_COOKIE: ${SECURE_COOKIE:-false}
-      TRUST_PROXY: ${TRUST_PROXY:-false}
-    # Served on the standard web port, so the address needs no :port.
-    ports:
-      - "80:3000"
+      # Served over HTTPS through Traefik.
+      SECURE_COOKIE: ${SECURE_COOKIE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+    # No published ports: Traefik (Hostinger's traefik-proxy network) routes
+    # the domain to the container and handles HTTPS.
+    networks:
+      - traefik-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-proxy
+      - traefik.http.routers.digital-dashboard.rule=Host(`${DOMAIN:-dashboard.bearlabs.app}`)
+      - traefik.http.routers.digital-dashboard.entrypoints=websecure
+      - traefik.http.routers.digital-dashboard.tls.certresolver=letsencrypt
+      - traefik.http.services.digital-dashboard.loadbalancer.server.port=3000
     volumes:
       - dashboard-data:/app/data
     healthcheck:
@@ -22,6 +31,10 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+networks:
+  traefik-proxy:
+    external: true
 
 volumes:
   dashboard-data:

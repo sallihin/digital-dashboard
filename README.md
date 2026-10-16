@@ -37,7 +37,7 @@ cp .env.example .env      # then set DASHBOARD_PASSWORD in .env
 docker compose up -d
 ```
 
-Data is kept in the `dashboard-data` volume, so it survives rebuilds. The dashboard is served on port 80, so open `http://your-server` with no port number.
+Data is kept in the `dashboard-data` volume, so it survives rebuilds. The compose file joins Hostinger's Traefik (`traefik-proxy` network), which serves it at `https://dashboard.bearlabs.app` with a free certificate. Set `DOMAIN` to use another address.
 
 Every push to `main` publishes a new image to `ghcr.io/sallihin/digital-dashboard:latest` (see `.github/workflows/docker-publish.yml`). Redeploy once the action finishes to pick it up. To build locally instead, run `docker build -t ghcr.io/sallihin/digital-dashboard:latest .` first.
 
