@@ -237,6 +237,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .pop button{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:11px 12px;border-radius:9px;font-size:15px}
 .pop button:hover,.pop button:focus-visible{background:var(--sunk)}
 .pop .none{padding:12px;color:var(--muted);font-size:15px}
+.pop .sep{height:1px;background:var(--line-soft);margin:6px 4px}
 .pop .sel-head{padding:10px 12px 4px;font-size:15px;font-weight:600}
 .pop .sel-sub{padding:0 12px 10px;font-size:13px;color:var(--muted)}
 .pop .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 6px 6px}
@@ -339,6 +340,9 @@ const $ = (s,el=document) => el.querySelector(s);
 const fmtD = n => { if(!n) return "0"; const r = Math.round(n*100)/100; return r%1===0 ? r.toFixed(0) : String(r); };
 const frac = v => fmtD(v);
 const LEAD_PREFILL = 0.25;
+// Out of Office is stored like a project allocation under this reserved id.
+const OOO = {id:"__ooo", name:"Out of Office", color:"#8E8E96", start:"0000-01-01", end:"9999-12-31"};
+const projOf = id => id===OOO.id ? OOO : S.projects[id];
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.setAttribute("role","status"); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),3000); }
 const tint = (c, pct) => `color-mix(in srgb, ${c} ${pct}%, #ffffff)`;
 function nextColor(){ const used = Object.values(S.projects).map(p=>(p.color||"").toUpperCase()); return PALETTE.find(c=>!used.includes(c)) || PALETTE[Object.keys(S.projects).length % PALETTE.length]; }
@@ -639,7 +643,7 @@ $("#overlay").addEventListener("click", e => {
     const lk = `${p.leadId}__${id}`;
     if(p.leadId && p.leadId!==prevLead && !S.allocs[lk]){
       const days = {};
-      for(let d=p.start; d<=p.end; d=add(d,1)) if(![0,6].includes(dow(d)) && !holidayOn(d, p.leadId)) days[d]=LEAD_PREFILL;
+      for(let d=p.start; d<=p.end; d=add(d,1)) if(![0,6].includes(dow(d)) && !holidayOn(d, p.leadId) && !S.allocs[`${p.leadId}__${OOO.id}`]?.days?.[d]) days[d]=LEAD_PREFILL;
       put("allocs", lk, {personId:p.leadId, projectId:id, days});
     }
     toast("Saved");
@@ -675,7 +679,7 @@ $("#overlay").addEventListener("submit", e => {
 
 /* ---------- resources ---------- */
 function resDays(){ const out=[]; for(let i=0;i<ui.resWeeks*7;i++){ const d=add(ui.resWeek,i); out.push({date:d, we:[0,6].includes(dow(d)), wkStart:i>0 && i%7===0}); } return out; }
-function loadOf(pid, date){ let s = holidayOn(date, pid) ? 1 : 0; for(const a of Object.values(S.allocs)) if(a.personId===pid && S.projects[a.projectId]) s += (a.days?.[date]||0); return s; }
+function loadOf(pid, date){ let s = holidayOn(date, pid) ? 1 : 0; for(const a of Object.values(S.allocs)) if(a.personId===pid && projOf(a.projectId)) s += (a.days?.[date]||0); return s; }
 function tone(load){ return load===0 ? "transparent" : load>1+1e-9 ? "var(--red)" : "var(--green)"; }
 function stateCls(load){ return load>1+1e-9 ? "state-over" : load>=1-1e-9 ? "state-full" : load>0 ? "state-ok" : ""; }
 function rowsFor(pid, days){
@@ -701,7 +705,7 @@ function renderResources(){
     hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
       html += `<tr class="hrow"><td class="rl"><div class="in"><span>${esc(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${esc(h.name)} for ${esc(person.name)}" title="Doesn't apply to ${esc(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
-    rows.forEach(pr=>{
+    (S.allocs[`${person.id}__${OOO.id}`] ? [OOO, ...rows] : rows).forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
       const vals = days.map(d=>a?.days?.[d.date]||0);
       html += `<tr class="prow"><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${esc(pr.name)}">${esc(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${esc(pr.name)} from ${esc(person.name)}">✕</button>`:""}</div></td>
@@ -729,6 +733,7 @@ function openPop(btn){
   $("#popover").innerHTML = `<div class="pop" style="left:${left}px;top:${r.bottom+8}px" role="menu">
     <div class="ph">Add ${esc(S.people[pid]?.name||"")} to</div>
     ${avail.length ? avail.map(p=>`<button role="menuitem" data-pick="${p.id}"><span class="swatch" style="background:${esc(p.color)}"></span>${pTitle(p)}</button>`).join("") : `<div class="none">Already on every current project.</div>`}
+    ${S.allocs[`${pid}__${OOO.id}`] ? "" : `<div class="sep" role="separator"></div><button role="menuitem" data-pick="${OOO.id}"><span class="swatch" style="background:${OOO.color}"></span>${OOO.name}</button>`}
   </div>`;
   $("#popover button")?.focus();
 }
@@ -773,7 +778,7 @@ document.addEventListener("pointerup", () => {
   openAllocPop(sel.p, sel.j, cs.slice(a,b+1).map(c=>c.dataset.d), cs[b]);
 });
 function openAllocPop(p, j, dates, anchor){
-  const pr = S.projects[j]; if(!pr || !anchor) return;
+  const pr = projOf(j); if(!pr || !anchor) return;
   popFor = "alloc";
   const n = dates.length, outN = dates.filter(d=>d<pr.start || d>pr.end).length;
   const cur = S.allocs[`${p}__${j}`]?.days || {};
