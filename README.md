@@ -39,6 +39,12 @@ docker compose up -d --build
 
 Data is kept in the `dashboard-data` volume, so it survives rebuilds. Set `HOST_PORT` in `.env` to publish on a port other than 3000.
 
+The image is built from the `main` branch on GitHub, so push changes before redeploying.
+
+**Hostinger Docker Manager:** choose *Compose from URL*, paste
+`https://raw.githubusercontent.com/sallihin/digital-dashboard/main/docker-compose.yml`,
+and add `DASHBOARD_PASSWORD` under environment variables.
+
 ## Keep it running (example with pm2)
 
 ```bash
