@@ -157,9 +157,10 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .prow .pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px;min-width:0}
 .prow .grow{flex:1}
 .prow .star{width:14px;height:14px;flex:none;color:var(--faint)}
-.prow .x{border:0;background:none;color:var(--faint);padding:3px 7px;border-radius:7px;visibility:hidden}
-.prow:hover .x,.prow .x:focus-visible{visibility:visible}
-.prow .x:hover{color:var(--over-ink);background:var(--sunk)}
+.prow .x,.hrow .x{border:0;background:none;color:var(--faint);padding:3px 7px;border-radius:7px;visibility:hidden}
+.prow:hover .x,.prow .x:focus-visible,.hrow:hover .x,.hrow .x:focus-visible{visibility:visible}
+.prow .x:hover,.hrow .x:hover{color:var(--over-ink);background:var(--sunk)}
+.hrow .grow{flex:1}
 .cell{width:100%;height:100%;border:0;background:transparent;font-size:14px;font-weight:600;min-width:46px;display:flex;align-items:center;justify-content:center;padding:9px 0;color:var(--on-brand)}
 .cell span{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:9px;margin:0 4px}
 .cell span.fill{border-radius:0;margin:0}
@@ -220,7 +221,14 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .set-sec + .set-sec{padding-top:26px;border-top:1px solid var(--line-soft)}
 .set-sec h3{font-size:17px;margin:0;font-weight:700}
 .row-2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
-.row-3{display:grid;grid-template-columns:1fr 160px auto;gap:10px;align-items:center}
+.row-3{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center}
+.hol-form{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center}
+.hol-form #new-hol{grid-column:1/-1}
+.hol-form .input{width:100%;min-width:0}
+.hol-item{display:flex;flex-direction:column;gap:6px}
+.hol-skip{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;color:var(--faint)}
+.hol-skip .chip{border:0;cursor:pointer;font:inherit;font-weight:600}
+.hol-skip .chip:hover{color:var(--ink)}
 .row-2 .input,.row-3 .input{width:100%;min-width:0}
 .hol-date{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 
@@ -336,7 +344,10 @@ function nextColor(){ const used = Object.values(S.projects).map(p=>(p.color||""
 const people = () => Object.entries(S.people).map(([id,p])=>({id,...p})).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
 const projects = () => Object.entries(S.projects).map(([id,p])=>({id,...p})).sort((a,b)=>(a.start||"").localeCompare(b.start||"") || (a.name||"").localeCompare(b.name||""));
 const holidays = () => Object.entries(S.holidays).map(([id,h])=>({id,...h})).filter(h=>h.date).sort((a,b)=>a.date.localeCompare(b.date));
-const holidayOn = date => holidays().find(h=>h.date===date);
+const holEnd = h => h.end && h.end>h.date ? h.end : h.date;
+const holApplies = (h, pid) => !(h.skip||[]).includes(pid);
+const holidayOn = (date, pid) => holidays().find(h=>date>=h.date && date<=holEnd(h) && holApplies(h, pid));
+const holRange = h => holEnd(h)===h.date ? fmtY(h.date) : `${fmt(h.date)} – ${fmtY(holEnd(h))}`;
 const liveProjects = () => projects().filter(p => !(p.end && p.end < TODAY));
 const personName = id => S.people[id]?.name || "Unassigned";
 const status = p => (p.start && p.start > TODAY) ? "upcoming" : "active";
@@ -536,7 +547,7 @@ function drawEditor(){
     <header><h2 id="ed-title">${id?"Edit project":"New project"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></header>
     <div class="body">
       <div class="field"><label class="label" for="f-name">Project name</label><input class="input" id="f-name" value="${esc(p.name)}" placeholder="e.g. 11.11 campaign site"></div>
-      <label class="check" for="f-ultra"><input type="checkbox" id="f-ultra" ${p.ultra?"checked":""}><span><b>Ultra ${LOCK}</b><small>Marks this project with a lock wherever it appears.</small></span></label>
+      <label class="check" for="f-ultra"><input type="checkbox" id="f-ultra" ${p.ultra?"checked":""}><span><b>Ultra ${LOCK}</b></span></label>
       <div class="two">
         <div class="field"><label class="label" for="f-start">Start</label><input class="input" type="date" id="f-start" value="${esc(p.start)}"></div>
         <div class="field"><label class="label" for="f-end">End</label><input class="input" type="date" id="f-end" value="${esc(p.end)}"></div>
@@ -576,9 +587,9 @@ function drawSettings(){
         <form class="row-2" id="team-add"><input class="input" id="new-person" placeholder="Add a person" aria-label="New person's name"><button class="btn dark" type="submit">Add</button></form>
       </div>
       <div class="set-sec"><h3>Holidays</h3>
-        <p class="hint" style="margin:0">Each holiday shows as a fully booked day for everyone in Resources.</p>
+        <p class="hint" style="margin:0">Holidays show as fully booked days for everyone in Resources. Leave the end date empty for a single day. To skip a holiday for someone, use the ✕ on its row in Resources.</p>
         <div id="hol-list" class="set-sec" style="gap:10px"></div>
-        <form class="row-3" id="hol-add"><input class="input" id="new-hol" placeholder="Holiday name, e.g. Deepavali" aria-label="Holiday name"><input class="input" id="new-hol-date" type="date" aria-label="Holiday date"><button class="btn dark" type="submit">Add</button></form>
+        <form class="hol-form" id="hol-add"><input class="input" id="new-hol" placeholder="Holiday name, e.g. Deepavali" aria-label="Holiday name"><input class="input" id="new-hol-date" type="date" aria-label="Start date" title="Start date"><input class="input" id="new-hol-end" type="date" aria-label="End date (optional)" title="End date (optional)"><button class="btn dark" type="submit">Add</button></form>
       </div>
       ${mode==="api" ? `<div class="set-sec"><h3>Account</h3><a class="btn" href="/logout" style="align-self:flex-start;text-decoration:none;color:var(--ink)">Sign out</a></div>` : ""}
     </div>
@@ -593,7 +604,8 @@ function drawSettingsLists(){
     tl.innerHTML = pp.length ? pp.map(p=>`<div class="row-2"><input class="input" id="pn-${p.id}" data-act="pname" data-id="${p.id}" value="${esc(p.name)}" aria-label="Name"><button class="btn small danger" data-act="pdel" data-id="${p.id}">Remove</button></div>`).join("") : `<p class="hint" style="margin:0">No one here yet.</p>`;
   }
   const hs = holidays();
-  hl.innerHTML = hs.length ? hs.map(h=>`<div class="row-3"><span>${esc(h.name)}</span><span class="hol-date">${fmtY(h.date)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>`).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
+  hl.innerHTML = hs.length ? hs.map(h=>{ const sk = (h.skip||[]).filter(pid=>S.people[pid]);
+    return `<div class="hol-item"><div class="row-3"><span>${esc(h.name)}</span><span class="hol-date">${holRange(h)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>${sk.length?`<div class="hol-skip">Not for:${sk.map(pid=>`<button class="chip" data-act="hunskip" data-id="${h.id}" data-p="${pid}" title="Apply to ${esc(S.people[pid].name)} again" aria-label="Apply ${esc(h.name)} to ${esc(S.people[pid].name)} again">${esc(S.people[pid].name)} ✕</button>`).join("")}</div>`:""}</div>`; }).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
 }
 function closeOverlay(){ ed=null; $("#overlay").innerHTML=""; }
 
@@ -632,6 +644,7 @@ $("#overlay").addEventListener("click", e => {
     del("people", id);
   }
   else if(a==="hdel") del("holidays", t.dataset.id);
+  else if(a==="hunskip"){ const h=S.holidays[t.dataset.id]; if(h) put("holidays", t.dataset.id, {...h, skip:(h.skip||[]).filter(x=>x!==t.dataset.p)}); }
 });
 $("#overlay").addEventListener("change", e => {
   if(!ed) return; const t=e.target;
@@ -643,16 +656,18 @@ $("#overlay").addEventListener("submit", e => {
   e.preventDefault();
   if(e.target.id==="team-add"){ const v=$("#new-person").value.trim(); if(!v){ $("#new-person").focus(); return; } $("#new-person").value=""; put("people", rid(), {name:v}); $("#new-person").focus(); }
   if(e.target.id==="hol-add"){
-    const n=$("#new-hol").value.trim(), d=$("#new-hol-date").value;
+    const n=$("#new-hol").value.trim(), d=$("#new-hol-date").value, en=$("#new-hol-end").value;
     if(!n){ $("#new-hol").focus(); toast("Give the holiday a name."); return; }
-    if(!d){ $("#new-hol-date").focus(); toast("Pick the holiday's date."); return; }
-    $("#new-hol").value=""; $("#new-hol-date").value=""; put("holidays", rid(), {name:n, date:d}); $("#new-hol").focus();
+    if(!d){ $("#new-hol-date").focus(); toast("Pick the holiday's start date."); return; }
+    if(en && en<d){ $("#new-hol-end").focus(); toast("The end date is before the start date."); return; }
+    $("#new-hol").value=""; $("#new-hol-date").value=""; $("#new-hol-end").value="";
+    put("holidays", rid(), en && en>d ? {name:n, date:d, end:en} : {name:n, date:d}); $("#new-hol").focus();
   }
 });
 
 /* ---------- resources ---------- */
 function resDays(){ const out=[]; for(let i=0;i<ui.resWeeks*7;i++){ const d=add(ui.resWeek,i); out.push({date:d, we:[0,6].includes(dow(d)), wkStart:i>0 && i%7===0}); } return out; }
-function loadOf(pid, date){ let s = holidayOn(date) ? 1 : 0; for(const a of Object.values(S.allocs)) if(a.personId===pid && S.projects[a.projectId]) s += (a.days?.[date]||0); return s; }
+function loadOf(pid, date){ let s = holidayOn(date, pid) ? 1 : 0; for(const a of Object.values(S.allocs)) if(a.personId===pid && S.projects[a.projectId]) s += (a.days?.[date]||0); return s; }
 function tone(load){ return load===0 ? "transparent" : load>1+1e-9 ? "var(--red)" : "var(--green)"; }
 function stateCls(load){ return load>1+1e-9 ? "state-over" : load>=1-1e-9 ? "state-full" : load>0 ? "state-ok" : ""; }
 function rowsFor(pid, days){
@@ -667,7 +682,7 @@ function renderResources(){
   const head = `<div class="sec-head"><h2>Resource</h2><span class="spacer"></span>${dateNav("res", first, last)}
     <div class="seg" role="group" aria-label="Weeks shown">${[1,2].map(n=>`<button data-act="res-weeks" data-v="${n}" aria-pressed="${ui.resWeeks===n}">${n} week${n>1?"s":""}</button>`).join("")}</div></div>`;
   if(!pp.length) return head + `<div class="panel empty"><b>No team members yet</b>Open Settings with the gear icon at the top to add people.</div>`;
-  const hols = holidays().filter(h=>h.date>=first && h.date<=last);
+  const hols = holidays().filter(h=>h.date<=last && holEnd(h)>=first);
   const cls = d => `${d.we?"we":""} ${d.wkStart?"wk-gap":""}`;
   const thead = `<thead><tr><th class="rl"></th>${days.map(d=>{const t=new Date(D(d.date)); return `<th class="${cls(d)} ${d.date===TODAY?"today-col":""}">${WD[t.getUTCDay()]}<span class="d">${t.getUTCDate()}</span></th>`;}).join("")}</tr></thead>`;
   const body = pp.map(person=>{
@@ -675,8 +690,8 @@ function renderResources(){
     let html = `<tr class="person"><td class="rl"><div class="prs"><span class="nm">${esc(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${esc(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
       const l = loadOf(person.id,d.date);
       return `<td class="${cls(d)}"><div class="load" title="${fmtD(l)} day booked"><span class="m"><i style="width:${Math.min(100,l*100)}%;background:${tone(l)}"></i></span></div></td>`;}).join("")}</tr>`;
-    hols.forEach(h=>{
-      html += `<tr class="hrow"><td class="rl"><div class="in"><span>${esc(h.name)}</span><span class="tag">Holiday</span></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date===h.date?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
+    hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
+      html += `<tr class="hrow"><td class="rl"><div class="in"><span>${esc(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${esc(h.name)} for ${esc(person.name)}" title="Doesn't apply to ${esc(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
     rows.forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
@@ -815,6 +830,7 @@ document.querySelector("main").addEventListener("click", e => {
     case "assign": openPop(t); break;
     case "cell": if(e.detail===0){ openAllocPop(t.dataset.p, t.dataset.j, [t.dataset.d], t); } break;
     case "unassign": del("allocs", t.dataset.k); break;
+    case "hskip": { const h=S.holidays[t.dataset.id]; if(!h) break; put("holidays", t.dataset.id, {...h, skip:[...new Set([...(h.skip||[]), t.dataset.p])]}); toast(`${h.name} removed for ${S.people[t.dataset.p]?.name||"them"}. Undo in Settings.`); break; }
     case "toggle": { const td=S.todos[t.dataset.id]; put("todos", t.dataset.id, {...td, done:t.checked, doneAt:t.checked?Date.now():null}); break; }
     case "tdel": del("todos", t.dataset.id); break;
     case "clear-done": Object.entries(S.todos).filter(([,x])=>x.done).forEach(([id])=>del("todos",id)); break;
