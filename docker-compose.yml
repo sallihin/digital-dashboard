@@ -1,8 +1,8 @@
 services:
   dashboard:
-    # Built straight from GitHub so it works when only this file is deployed.
-    build: https://github.com/sallihin/digital-dashboard.git#main
-    image: digital-dashboard
+    # Published by .github/workflows/docker-publish.yml on every push to main.
+    image: ghcr.io/sallihin/digital-dashboard:latest
+    pull_policy: always
     container_name: digital-dashboard
     restart: unless-stopped
     # Set these in your host's environment variables panel, or in a .env file
@@ -12,11 +12,9 @@ services:
       SESSION_DAYS: ${SESSION_DAYS:-30}
       SECURE_COOKIE: ${SECURE_COOKIE:-false}
       TRUST_PROXY: ${TRUST_PROXY:-false}
-      # Fixed inside the container; change the published port with HOST_PORT.
-      PORT: "3000"
-      DATA_FILE: data/db.json
+    # Served on the standard web port, so the address needs no :port.
     ports:
-      - "${HOST_PORT:-3000}:3000"
+      - "80:3000"
     volumes:
       - dashboard-data:/app/data
     healthcheck:

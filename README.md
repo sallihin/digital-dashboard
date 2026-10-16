@@ -34,12 +34,12 @@ Restart the server after editing `.env`.
 
 ```bash
 cp .env.example .env      # then set DASHBOARD_PASSWORD in .env
-docker compose up -d --build
+docker compose up -d
 ```
 
-Data is kept in the `dashboard-data` volume, so it survives rebuilds. Set `HOST_PORT` in `.env` to publish on a port other than 3000.
+Data is kept in the `dashboard-data` volume, so it survives rebuilds. The dashboard is served on port 80, so open `http://your-server` with no port number.
 
-The image is built from the `main` branch on GitHub, so push changes before redeploying.
+Every push to `main` publishes a new image to `ghcr.io/sallihin/digital-dashboard:latest` (see `.github/workflows/docker-publish.yml`). Redeploy once the action finishes to pick it up. To build locally instead, run `docker build -t ghcr.io/sallihin/digital-dashboard:latest .` first.
 
 **Hostinger Docker Manager:** choose *Compose from URL*, paste
 `https://raw.githubusercontent.com/sallihin/digital-dashboard/main/docker-compose.yml`,
