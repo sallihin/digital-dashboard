@@ -30,6 +30,15 @@ Open `http://your-server:3000` and sign in.
 
 Restart the server after editing `.env`.
 
+## Run with Docker
+
+```bash
+cp .env.example .env      # then set DASHBOARD_PASSWORD in .env
+docker compose up -d --build
+```
+
+Data is kept in the `dashboard-data` volume, so it survives rebuilds. Set `HOST_PORT` in `.env` to publish on a port other than 3000.
+
 ## Keep it running (example with pm2)
 
 ```bash

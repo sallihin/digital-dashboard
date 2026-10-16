@@ -1,0 +1,25 @@
+services:
+  dashboard:
+    build: .
+    image: digital-dashboard
+    container_name: digital-dashboard
+    restart: unless-stopped
+    # Settings (DASHBOARD_PASSWORD, SESSION_DAYS, SECURE_COOKIE, TRUST_PROXY)
+    # come from .env next to this file. See .env.example.
+    env_file: .env
+    environment:
+      # Fixed inside the container; change the published port with HOST_PORT.
+      PORT: "3000"
+      DATA_FILE: data/db.json
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    volumes:
+      - dashboard-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  dashboard-data:
