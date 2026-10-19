@@ -198,7 +198,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .hcell{display:flex;align-items:center;justify-content:center;height:100%;padding:9px 4px}
 .hcell span{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:9px;background:var(--holiday);color:var(--muted);font-size:12px;font-weight:600}
 .state-ok{color:var(--ok-ink)}.state-full{color:var(--full-ink)}.state-over{color:var(--over-ink)}
-body.pan-ready .rgrid,body.pan-ready .rgrid *{cursor:grab!important}
+body.pan-ready .rgrid thead,body.pan-ready .rgrid thead *,body.pan-ready .rgrid tr.prow[data-key],body.pan-ready .rgrid tr.prow[data-key] *{cursor:grab!important}
 body.panning,body.panning *{cursor:grabbing!important;user-select:none}
 .legend{display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-top:18px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
@@ -238,6 +238,14 @@ body.todo-dragging,body.todo-dragging *{cursor:grabbing!important}
 
 .empty{padding:56px 28px;text-align:center;color:var(--muted)}
 .empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
+
+/* Dialog */
+.dialog{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:41;width:min(480px,calc(100% - 32px));background:var(--card);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:26px 28px 22px}
+.dialog h2{font-size:20px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em}
+.dialog p{margin:0 0 10px;font-size:15px;color:var(--muted)}
+.dialog p b{color:var(--ink);font-weight:600}
+.dialog .actions{display:flex;gap:10px;align-items:center;margin-top:18px}
+.dialog .actions .spacer{flex:1}
 
 /* Side panel */
 .scrim{position:fixed;inset:0;background:rgba(10,10,14,.35);z-index:40}
@@ -751,7 +759,7 @@ function drawSettingsLists(){
   hl.innerHTML = hs.length ? hs.map(h=>{ const sk = (h.skip||[]).filter(pid=>S.people[pid]);
     return `<div class="hol-item"><div class="row-3"><span>${tx(h.name)}</span><span class="hol-date">${holRange(h)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>${sk.length?`<div class="hol-skip">Not for:${sk.map(pid=>`<button class="chip" data-act="hunskip" data-id="${h.id}" data-p="${pid}" title="Apply to ${tx(S.people[pid].name)} again" aria-label="Apply ${tx(h.name)} to ${tx(S.people[pid].name)} again">${tx(S.people[pid].name)} ✕</button>`).join("")}</div>`:""}</div>`; }).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
 }
-function closeOverlay(){ ed=null; $("#overlay").innerHTML=""; }
+function closeOverlay(){ const done = ed && ed.onClose; ed=null; $("#overlay").innerHTML=""; if(done) done(); }
 
 $("#settings-btn").addEventListener("click", openSettings);
 $("#overlay").addEventListener("click", e => {
@@ -762,6 +770,8 @@ $("#overlay").addEventListener("click", e => {
   if(t.dataset.c){ ed.p.color=t.dataset.c; $("#f-color").value=t.dataset.c.toLowerCase(); document.querySelectorAll("#f-colors [data-c]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.c===ed.p.color))); return; }
   const a = t.dataset.act;
   if(a==="close") closeOverlay();
+  else if(a==="clash-ow") ed.overwrite();
+  else if(a==="clash-merge") ed.merge();
   else if(a==="demo"){
     ui.demo = t.checked; saveUI(); demoCache.clear();
     if(ui.demo){ render(); toast("Demo mode on. Changes won't be saved."); }
@@ -853,7 +863,7 @@ function renderResources(){
     (S.allocs[`${person.id}__${OOO.id}`] ? [OOO, ...rows] : rows).forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
       const vals = days.map(d=>a?.days?.[d.date]||0);
-      html += `<tr class="prow"><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}">✕</button>`:""}</div></td>
+      html += `<tr class="prow"${a?` data-key="${key}"`:""}><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}">✕</button>`:""}</div></td>
         ${days.map((d,i)=>{ const inR = d.date>=pr.start && d.date<=pr.end; const v = vals[i];
           let spanCls = "", st = "";
           if(v){ spanCls = "fill" + (vals[i-1]?"":" s") + (vals[i+1]?"":" e"); st = `background:${tint(esc(pr.color), v>=1?100:v>=0.5?65:38)}`; }
@@ -862,32 +872,67 @@ function renderResources(){
     return html;
   }).join("");
   return head + `<div class="panel scroll-x"><table class="rgrid">${thead}<tbody>${body}</tbody></table></div>
-    <div class="legend"><span>Click or drag across days to set time</span><span>Hold Shift and drag to move through dates</span><span><i style="background:var(--green)"></i>Good</span><span><i style="background:var(--red)"></i>Overbooked</span><span>Striped = outside project dates</span></div>`;
+    <div class="legend"><span>Click or drag across days to set time</span><span>Shift + drag the dates to move through time, or a project row to move its bookings</span><span><i style="background:var(--green)"></i>Good</span><span><i style="background:var(--red)"></i>Overbooked</span><span>Striped = outside project dates</span></div>`;
 }
 
-/* Shift + drag pans the resource grid one day per column dragged. */
-let pan = null;
+/* Shift + drag in Resources: on the date header it pans the view; on a project
+   row it moves that person's booked days on that project. */
+let pan = null, panEnded = 0;
 const setPanReady = on => document.body.classList.toggle("pan-ready", on);
 document.addEventListener("keydown", e => { if(e.key==="Shift") setPanReady(true); });
 document.addEventListener("keyup", e => { if(e.key==="Shift") setPanReady(false); });
 window.addEventListener("blur", () => setPanReady(false));
+const shiftDays = (days, n) => Object.fromEntries(Object.entries(days||{}).map(([d,v])=>[add(d,n), v]));
+const redrawResources = () => { const R = $("#resources"); keepScroll(R, ()=>{ R.innerHTML = renderResources(); }); };
 document.addEventListener("pointerdown", e => {
   if(!e.shiftKey || e.button>0) return;
   const grid = e.target.closest(".rgrid"); if(!grid) return;
   const col = grid.querySelector("thead th:not(.rl)"); if(!col) return;
-  closePop();
-  pan = {x:e.clientX, start:ui.resWeek, w:col.getBoundingClientRect().width, n:0};
-  document.body.classList.add("panning"); e.preventDefault();
+  const w = col.getBoundingClientRect().width;
+  if(e.target.closest("thead")) pan = {kind:"view", x:e.clientX, w, n:0, start:ui.resWeek};
+  else {
+    const row = e.target.closest("tr.prow[data-key]"); const a = row && S.allocs[row.dataset.key];
+    if(!a || !Object.keys(a.days||{}).length) return;
+    pan = {kind:"row", x:e.clientX, w, n:0, key:row.dataset.key, orig:a};
+  }
+  closePop(); document.body.classList.add("panning"); e.preventDefault();
 });
 document.addEventListener("pointermove", e => {
   if(!pan) return;
-  const n = Math.round((pan.x - e.clientX) / pan.w); if(n===pan.n) return;
-  pan.n = n; ui.resWeek = add(pan.start, n);
-  const R = $("#resources"); keepScroll(R, ()=>{ R.innerHTML = renderResources(); });
+  const n = Math.round((pan.kind==="view" ? pan.x - e.clientX : e.clientX - pan.x) / pan.w); if(n===pan.n) return;
+  pan.n = n;
+  if(pan.kind==="view") ui.resWeek = add(pan.start, n);
+  else S.allocs = {...S.allocs, [pan.key]: {...pan.orig, days: shiftDays(pan.orig.days, n)}};  // preview only
+  redrawResources();
 });
-let panEnded = 0;
-document.addEventListener("pointerup", () => { if(!pan) return; panEnded = Date.now(); pan = null; document.body.classList.remove("panning"); });
+document.addEventListener("pointerup", () => {
+  if(!pan) return; const p = pan; pan = null; panEnded = Date.now(); document.body.classList.remove("panning");
+  if(p.kind==="row" && p.n) dropRow(p);
+});
 document.addEventListener("click", e => { if(Date.now()-panEnded < 300 && e.target.closest("#resources")){ e.preventDefault(); e.stopPropagation(); } }, true);
+
+// Save a moved row, asking first if it now overlaps the person's other projects.
+function dropRow({key, orig, n}){
+  const days = shiftDays(orig.days, n), moved = {...orig, days};
+  const restore = () => { S.allocs = {...S.allocs, [key]: orig}; render(); };
+  const clashes = Object.entries(S.allocs).filter(([k,a])=>k!==key && a.personId===orig.personId && S.projects[a.projectId])
+    .map(([k,a])=>({k, a, ds:Object.keys(days).filter(d=>days[d]>0 && a.days?.[d]>0).sort()})).filter(c=>c.ds.length);
+  if(!clashes.length){ put("allocs", key, moved); return; }
+  const allDs = [...new Set(clashes.flatMap(c=>c.ds))].sort();
+  const what = projOf(orig.projectId), who = S.people[orig.personId];
+  ed = {kind:"clash", onClose: restore,
+    overwrite(){ ed.onClose = null; closeOverlay(); put("allocs", key, moved);
+      clashes.forEach(c=>{ const d2 = {...c.a.days}; c.ds.forEach(d=>delete d2[d]); put("allocs", c.k, {...c.a, days:d2}); }); toast("Moved and replaced the clashing time"); },
+    merge(){ ed.onClose = null; closeOverlay(); put("allocs", key, moved); toast("Moved; overlapping days now hold both bookings"); }};
+  $("#overlay").innerHTML = `<div class="scrim" data-act="close"></div>
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="cl-title" aria-describedby="cl-body">
+    <h2 id="cl-title">This clashes with other bookings</h2>
+    <div id="cl-body"><p>Moving ${tx(what.name)} for ${tx(who?.name||"")} overlaps ${clashes.map(c=>`<b>${tx(S.projects[c.a.projectId].name)}</b>`).join(", ")} on ${allDs.length} day${allDs.length>1?"s":""}: ${allDs.map(fmt).join(", ")}.</p>
+    <p class="hint"><b>Overwrite</b> removes the other bookings on those days. <b>Merge</b> keeps both.</p></div>
+    <div class="actions"><button class="btn ghost" data-act="close">Cancel</button><span class="spacer"></span><button class="btn" data-act="clash-merge">Merge</button><button class="btn dark" data-act="clash-ow">Overwrite</button></div>
+  </div>`;
+  $("#overlay .dialog .btn.dark").focus();
+}
 
 /* ---------- popovers ---------- */
 let popFor = null, popApply = null, sel = null;
