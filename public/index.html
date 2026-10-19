@@ -843,6 +843,13 @@ function rowsFor(pid, days){
   for(const a of Object.values(S.allocs)) if(a.personId===pid && S.projects[a.projectId]) ids.add(a.projectId);
   return [...ids].map(id=>({id,...S.projects[id]})).sort((a,b)=>(a.start||"").localeCompare(b.start||""));
 }
+// Out of Office rows show only when they have a day in view, or were just added
+// from the + menu for the week on screen.
+const oooOpened = {};
+function oooVisible(pid, days){
+  const a = S.allocs[`${pid}__${OOO.id}`]; if(!a) return false;
+  return oooOpened[pid]===ui.resWeek || days.some(d=>a.days?.[d.date]>0);
+}
 function renderResources(){
   const pp = people(); const days = resDays();
   const first = days[0].date, last = days[days.length-1].date;
@@ -860,7 +867,7 @@ function renderResources(){
     hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
       html += `<tr class="hrow"><td class="rl"><div class="in"><span>${tx(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${tx(h.name)} for ${tx(person.name)}" title="Doesn't apply to ${tx(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
-    (S.allocs[`${person.id}__${OOO.id}`] ? [OOO, ...rows] : rows).forEach(pr=>{
+    (oooVisible(person.id, days) ? [OOO, ...rows] : rows).forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
       const vals = days.map(d=>a?.days?.[d.date]||0);
       html += `<tr class="prow"${a?` data-key="${key}"`:""}><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}">✕</button>`:""}</div></td>
@@ -947,13 +954,16 @@ function openPop(btn){
   $("#popover").innerHTML = `<div class="pop" style="left:${left}px;top:${r.bottom+8}px" role="menu">
     <div class="ph">Add ${tx(S.people[pid]?.name||"")} to</div>
     ${avail.length ? avail.map(p=>`<button role="menuitem" data-pick="${p.id}"><span class="swatch" style="background:${esc(p.color)}"></span>${pTitle(p)}</button>`).join("") : `<div class="none">Already on every current project.</div>`}
-    ${S.allocs[`${pid}__${OOO.id}`] ? "" : `<div class="sep" role="separator"></div><button role="menuitem" data-pick="${OOO.id}"><span class="swatch" style="background:${OOO.color}"></span>${OOO.name}</button>`}
+    ${oooVisible(pid, resDays()) ? "" : `<div class="sep" role="separator"></div><button role="menuitem" data-pick="${OOO.id}"><span class="swatch" style="background:${OOO.color}"></span>${OOO.name}</button>`}
   </div>`;
   $("#popover button")?.focus();
 }
 $("#popover").addEventListener("click", e => {
   const b = e.target.closest("[data-pick]");
-  if(b && popFor){ const key = `${popFor}__${b.dataset.pick}`; const pid = popFor; closePop(); put("allocs", key, {personId:pid, projectId:b.dataset.pick, days:{}}); return; }
+  if(b && popFor){
+    const key = `${popFor}__${b.dataset.pick}`; const pid = popFor; closePop();
+    if(b.dataset.pick===OOO.id){ oooOpened[pid] = ui.resWeek; if(S.allocs[key]){ render(); return; } }
+    put("allocs", key, {personId:pid, projectId:b.dataset.pick, days:{}}); return; }
   const m = e.target.closest("[data-amt]"); if(m && popApply) popApply(parseFloat(m.dataset.amt));
 });
 $("#popover").addEventListener("submit", e => {
