@@ -135,6 +135,24 @@ table.plist{width:100%;border-collapse:collapse;min-width:860px}
 .bar.clip-l{border-top-left-radius:0;border-bottom-left-radius:0}
 .bar.clip-r{border-top-right-radius:0;border-bottom-right-radius:0}
 
+/* Month calendar */
+.mc{min-width:760px}
+.mc-dow{display:grid;grid-template-columns:repeat(7,1fr)}
+.mc-dow div{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600;padding:18px 12px 10px}
+.mc-week{position:relative;display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid var(--line-soft)}
+.mc-day{padding:8px 10px;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.mc-day + .mc-day{border-left:1px solid var(--line-soft)}
+.mc-day.we{background:var(--weekend)}
+.mc-day.out{color:var(--faint)}
+.mc-day.is-today .n{background:var(--hot);color:#fff;border-radius:999px;padding:2px 8px;margin-left:-8px}
+.mc-bar{position:absolute;height:20px;border:0;border-radius:6px;font-size:12px;font-weight:600;padding:0 8px;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--on-brand);text-align:left}
+.mc-bar .lock{width:12px;height:12px;color:var(--on-brand);flex:none}
+.mc-bar.proj:hover{filter:brightness(.95)}
+.mc-bar.hol{background:var(--holiday);color:var(--muted)}
+.mc-bar.ooo{background:var(--card);border:1px dashed var(--faint);color:var(--muted)}
+.mc-bar.clip-l{border-top-left-radius:0;border-bottom-left-radius:0}
+.mc-bar.clip-r{border-top-right-radius:0;border-bottom-right-radius:0}
+
 /* Resources grid */
 table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:none;-webkit-user-select:none}
 .rgrid th,.rgrid td{padding:0;height:58px;border-top:1px solid var(--line-soft)}
@@ -151,6 +169,8 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .plus{width:30px;height:30px;border-radius:9px;border:1px dashed var(--faint);background:transparent;color:var(--muted);display:grid;place-items:center;font-size:18px;line-height:1;margin-left:auto;flex:none}
 .plus:hover{border-style:solid;border-color:var(--btn-dark);color:var(--btn-dark-ink);background:var(--btn-dark)}
 .load{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:100%;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)}
+.load .r{font-size:11px;line-height:1;font-weight:500;color:var(--faint)}
+.load .r.over{color:var(--red);font-weight:700}
 .load .m{width:64%;height:6px;border-radius:2px;background:var(--line);overflow:hidden}
 .load .m i{display:block;height:100%}
 .prow .rl .in{display:flex;align-items:center;gap:10px;height:100%;padding-left:18px}
@@ -183,6 +203,17 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 /* Todos */
 .todo-add{display:flex;gap:12px;padding:24px 28px}
 .todo-add input{flex:1;min-width:0}
+.todo-add select{max-width:220px;min-width:0;color:var(--muted)}
+.todo .grip{border:0;background:none;color:var(--faint);cursor:grab;padding:0;width:20px;height:24px;flex:none;display:grid;place-items:center;touch-action:none;opacity:.45;border-radius:6px}
+.todo .grip svg{width:16px;height:16px}
+.todo:hover .grip,.todo .grip:focus-visible{opacity:1}
+.todo .grip-sp{width:20px;flex:none}
+.todo.dragging{background:var(--sunk);box-shadow:0 6px 20px rgba(0,0,0,.12);position:relative;z-index:2}
+.todo.dragging .grip{cursor:grabbing}
+.todo .who{border:0;background:var(--sunk);color:var(--muted);font-size:13px;font-weight:600;padding:3px 8px;border-radius:7px;max-width:160px;flex:none;cursor:pointer}
+.todo .who:not(.set){opacity:0}
+.todo:hover .who,.todo .who:focus-visible{opacity:1}
+.todo.done .who.set{opacity:.6}
 #todo-list .todo{display:flex;align-items:flex-start;gap:16px;padding:18px 28px;border-top:1px solid var(--line-soft)}
 .todo input[type=checkbox]{width:22px;height:22px;accent-color:var(--hot);flex:none;margin-top:1px}
 .todo .t{flex:1;min-width:0;overflow-wrap:anywhere;cursor:pointer;font-size:16px}
@@ -261,6 +292,10 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
   .row-3{grid-template-columns:1fr 1fr}
   .row-3 .btn{grid-column:1/-1}
   .todo-add,#todo-list .todo,.todo-foot{padding-left:18px;padding-right:18px}
+  .todo-add{flex-wrap:wrap}
+  .todo-add input{flex-basis:100%}
+  .todo-add select{flex:1;max-width:none}
+  .todo .who:not(.set){opacity:1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -283,7 +318,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
     <section id="todos">
       <div class="sec-head"><h2>Todo</h2></div>
       <div class="panel">
-        <form class="todo-add" id="todo-add"><input class="input" id="todo-text" placeholder="Add a todo" autocomplete="off" aria-label="New todo"><button class="btn dark" type="submit">Add</button></form>
+        <form class="todo-add" id="todo-add"><input class="input" id="todo-text" placeholder="Add a todo" autocomplete="off" aria-label="New todo"><select class="input" id="todo-who" aria-label="Assign to (optional)"></select><button class="btn dark" type="submit">Add</button></form>
         <div id="todo-list"></div>
       </div>
     </section>
@@ -299,7 +334,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 const MARKETS = ["AU","IN","SG","MY","TH","VN","ID","PH"];
 const PALETTE = ["#FF4FA3","#FFD041","#4DE1FF","#FF78C7","#FFE38A","#A6EFFF","#FFB3D6","#FFC7E6"];
 const COLLS = ["people","projects","todos","allocs","holidays"];
-const HOURS_PER_DAY = 8, CAL_WEEKS = 13;
+const HOURS_PER_DAY = 8, CAL_WEEKS = 8;
 const LOCK = `<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Ultra"><title>Ultra</title><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>`;
 const STAR = `<svg class="star" viewBox="0 0 24 24" role="img" aria-label="Lead"><title>Lead</title><path fill="currentColor" d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9-4.4-4.1 6-.7z"/></svg>`;
 let S = {people:{},projects:{},todos:{},allocs:{},holidays:{}};
@@ -332,13 +367,14 @@ const monthStart = s => s.slice(0,8)+"01";
 const addMonths = (s,n) => { const t=new Date(D(s)); return iso(Date.UTC(t.getUTCFullYear(), t.getUTCMonth()+n, 1)); };
 ui.calStart = monday(TODAY);
 ui.resWeek = monday(TODAY);
+ui.month = monthStart(TODAY);
 
 /* ---------- helpers ---------- */
 const esc = s => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const rid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const $ = (s,el=document) => el.querySelector(s);
 const fmtD = n => { if(!n) return "0"; const r = Math.round(n*100)/100; return r%1===0 ? r.toFixed(0) : String(r); };
-const frac = v => fmtD(v);
+const hrs = v => `${fmtD(v*HOURS_PER_DAY)}h`;
 const LEAD_PREFILL = 0.25;
 // Out of Office is stored like a project allocation under this reserved id.
 const OOO = {id:"__ooo", name:"Out of Office", color:"#8E8E96", start:"0000-01-01", end:"9999-12-31"};
@@ -446,15 +482,17 @@ function dateNav(which, start, end){
 /* ---------- projects ---------- */
 function renderProjects(){
   const list = liveProjects();
-  const cal = ui.pview==="cal";
+  const cal = ui.pview==="cal", month = ui.pview==="month";
   const start = ui.calStart, end = add(start, CAL_WEEKS*7-1);
   const head = `<div class="sec-head"><h2>Projects</h2>
       <div class="seg icons" role="group" aria-label="Project view">
-        <button data-act="pview" data-v="list" aria-pressed="${!cal}" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
-        <button data-act="pview" data-v="cal" aria-pressed="${cal}" aria-label="Calendar view" title="Calendar view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
+        <button data-act="pview" data-v="list" aria-pressed="${!cal && !month}" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+        <button data-act="pview" data-v="cal" aria-pressed="${cal}" aria-label="Timeline view" title="Timeline view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M8 12h12M4 18h7"/></svg></button>
+        <button data-act="pview" data-v="month" aria-pressed="${month}" aria-label="Month view" title="Month view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
       </div>
-      <span class="spacer"></span>${cal ? dateNav("cal", start, end) : ""}
+      <span class="spacer"></span>${cal ? dateNav("cal", start, end) : month ? monthNav() : ""}
       <button class="btn dark" data-act="new-project">+ New project</button></div>`;
+  if(month) return head + projectMonth();
   if(!list.length) return head + `<div class="panel empty"><b>No current projects</b>Add one with “New project”. Finished projects drop off on their own.</div>`;
   return head + (cal ? projectCal(list) : projectList(list));
 }
@@ -510,6 +548,64 @@ function projectCal(list){
       ${rows || `<div class="empty">No projects in this window.</div>`}
     </div></div>
     <p class="hint" style="margin:16px 0 0">Drag a bar to move it, drag its ends to change dates, click to edit.</p>`;
+}
+
+/* month view */
+const MON_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function monthNav(){
+  const t = new Date(D(ui.month));
+  return `<button class="btn small" data-act="mon-prev" aria-label="Previous month">←</button>
+    <button class="btn small" data-act="mon-today">This month</button>
+    <button class="btn small" data-act="mon-next" aria-label="Next month">→</button>
+    <span class="range-btn" style="cursor:default">${MON_FULL[t.getUTCMonth()]} ${t.getUTCFullYear()}</span>`;
+}
+// Consecutive Out of Office days with the same amount, per person.
+function oooRuns(){
+  const out = [];
+  for(const a of Object.values(S.allocs)){
+    if(a.projectId!==OOO.id || !S.people[a.personId]) continue;
+    const ds = Object.keys(a.days||{}).filter(d=>a.days[d]>0).sort();
+    let run = null;
+    for(const d of ds){
+      const v = a.days[d];
+      if(run && run.e===add(d,-1) && run.v===v){ run.e = d; continue; }
+      run = {s:d, e:d, v, pid:a.personId}; out.push(run);
+    }
+  }
+  return out;
+}
+function projectMonth(){
+  const first = ui.month, last = add(addMonths(first,1),-1);
+  const gs = monday(first), ge = add(monday(last),6);
+  const items = [
+    ...holidays().map(h=>({s:h.date, e:holEnd(h), k:0, cls:"hol", label:esc(h.name), title:`${esc(h.name)} · Holiday`})),
+    ...oooRuns().map(r=>{ const nm = esc(S.people[r.pid].name), hrs = r.v<1 ? ` ${fmtD(r.v*HOURS_PER_DAY)}h` : "";
+      return {s:r.s, e:r.e, k:1, cls:"ooo", label:`${nm} · Out of Office${hrs}`, title:`${nm} · Out of Office${hrs}`}; }),
+    ...projects().filter(p=>p.start && p.end).map(p=>({s:p.start, e:p.end, k:2, cls:"proj", id:p.id, color:p.color,
+      label:`${esc(p.name)}${p.ultra?LOCK:""}`, title:`${esc(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}`}))
+  ].filter(it=>it.e>=gs && it.s<=ge).sort((a,b)=>a.k-b.k || a.s.localeCompare(b.s) || b.e.localeCompare(a.e));
+  let weeks = "";
+  for(let w=gs; w<=ge; w=add(w,7)){
+    const we = add(w,6), lanes = [];
+    const bars = items.filter(it=>it.e>=w && it.s<=we).map(it=>{
+      const s = it.s<w?w:it.s, e = it.e>we?we:it.e, c0 = diff(w,s), c1 = diff(w,e);
+      let lane = lanes.findIndex(end=>end<c0); if(lane<0){ lane = lanes.length; lanes.push(c1); } else lanes[lane] = c1;
+      const cl = (it.s<w?" clip-l":"")+(it.e>we?" clip-r":"");
+      const pos = `left:calc(${c0/7*100}% + 4px);width:calc(${(c1-c0+1)/7*100}% - 8px);top:${36+lane*24}px`;
+      return it.cls==="proj"
+        ? `<button class="mc-bar proj${cl}" data-act="edit" data-id="${it.id}" style="${pos};background:${esc(it.color)}" title="${it.title}">${it.label}</button>`
+        : `<div class="mc-bar ${it.cls}${cl}" style="${pos}" title="${it.title}">${it.label}</div>`;
+    }).join("");
+    let days = "";
+    for(let i=0;i<7;i++){ const d = add(w,i);
+      days += `<div class="mc-day${i>4?" we":""}${d<first||d>last?" out":""}${d===TODAY?" is-today":""}"><span class="n">${new Date(D(d)).getUTCDate()}</span></div>`; }
+    weeks += `<div class="mc-week" style="min-height:${Math.max(116, 44+lanes.length*24)}px">${days}${bars}</div>`;
+  }
+  return `<div class="panel scroll-x"><div class="mc">
+      <div class="mc-dow">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div>${d}</div>`).join("")}</div>
+      ${weeks}
+    </div></div>
+    <p class="hint" style="margin:16px 0 0">Click a project to edit it. Grey bars are holidays; dashed bars are Out of Office.</p>`;
 }
 
 /* timeline drag */
@@ -653,6 +749,7 @@ $("#overlay").addEventListener("click", e => {
     const id=t.dataset.id; pdelArm=null;
     Object.keys(S.allocs).filter(k=>S.allocs[k].personId===id).forEach(k=>del("allocs",k));
     Object.entries(S.projects).filter(([,p])=>p.leadId===id).forEach(([pid,p])=>put("projects",pid,{...p,leadId:""}));
+    Object.entries(S.todos).filter(([,t])=>t.who===id).forEach(([tid,t])=>put("todos",tid,{...t,who:""}));
     del("people", id);
   }
   else if(a==="hdel") del("holidays", t.dataset.id);
@@ -701,7 +798,7 @@ function renderResources(){
     const rows = rowsFor(person.id, days);
     let html = `<tr class="person"><td class="rl"><div class="prs"><span class="nm">${esc(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${esc(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
       const l = loadOf(person.id,d.date);
-      return `<td class="${cls(d)}"><div class="load" title="${fmtD(l)} day booked"><span class="m"><i style="width:${Math.min(100,l*100)}%;background:${tone(l)}"></i></span></div></td>`;}).join("")}</tr>`;
+      return `<td class="${cls(d)}"><div class="load" title="${fmtD(l)} day booked (${hrs(l)})"><span class="r${l>1+1e-9?" over":""}">${l?fmtD(l):"&nbsp;"}</span><span class="m"><i style="width:${Math.min(100,l*100)}%;background:${tone(l)}"></i></span></div></td>`;}).join("")}</tr>`;
     hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
       html += `<tr class="hrow"><td class="rl"><div class="in"><span>${esc(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${esc(h.name)} for ${esc(person.name)}" title="Doesn't apply to ${esc(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
@@ -712,7 +809,7 @@ function renderResources(){
         ${days.map((d,i)=>{ const inR = d.date>=pr.start && d.date<=pr.end; const v = vals[i];
           let spanCls = "", st = "";
           if(v){ spanCls = "fill" + (vals[i-1]?"":" s") + (vals[i+1]?"":" e"); st = `background:${tint(esc(pr.color), v>=1?100:v>=0.5?65:38)}`; }
-          return `<td class="${cls(d)}"><button class="cell${inR?"":" off"}" data-act="cell" data-p="${person.id}" data-j="${pr.id}" data-d="${d.date}" aria-label="${esc(pr.name)}, ${d.date}: ${fmtD(v)} day"><span class="${spanCls}" style="${st}">${v?frac(v):""}</span></button></td>`; }).join("")}</tr>`;
+          return `<td class="${cls(d)}"><button class="cell${inR?"":" off"}" data-act="cell" data-p="${person.id}" data-j="${pr.id}" data-d="${d.date}" aria-label="${esc(pr.name)}, ${d.date}: ${fmtD(v*HOURS_PER_DAY)} hours"><span class="${spanCls}" style="${st}">${v?hrs(v):""}</span></button></td>`; }).join("")}</tr>`;
     });
     return html;
   }).join("");
@@ -792,7 +889,7 @@ function openAllocPop(p, j, dates, anchor){
     <div class="sel-head">${esc(S.people[p]?.name||"")} · ${esc(pr.name)}</div>
     <div class="sel-sub">${range} · ${n} day${n>1?"s":""}${outN?` (${outN} outside project dates)`:""}</div>
     <div class="opts">
-      ${[0.25,0.5,0.75,1].map(v=>`<button data-amt="${v}">${v}<small>${fmtD(v*HOURS_PER_DAY)}h</small></button>`).join("")}
+      ${[0.25,0.5,0.75,1].map(v=>`<button data-amt="${v}">${hrs(v)}<small>${v} day</small></button>`).join("")}
     </div>
     <form class="custom" id="alloc-custom"><input class="input" id="alloc-hours" type="number" min="0" max="24" step="0.25" value="${curH}" placeholder="Hours" aria-label="Hours per day"><span>hours per day</span><button class="btn dark small" type="submit">Set</button></form>
     <button class="clear" data-amt="0">Clear these days</button>
@@ -807,16 +904,61 @@ function openAllocPop(p, j, dates, anchor){
 }
 
 /* ---------- todos ---------- */
+const todoOrder = t => t.order ?? t.created ?? 0;
+const openTodoIds = () => Object.entries(S.todos).filter(([,t])=>!t.done).sort(([,a],[,b])=>todoOrder(a)-todoOrder(b)).map(([id])=>id);
+function whoOptions(sel, none){ return `<option value="">${none}</option>` + people().map(p=>`<option value="${p.id}"${p.id===sel?" selected":""}>${esc(p.name)}</option>`).join(""); }
 function renderTodos(){
+  const ws = $("#todo-who"); if(ws){ const v = S.people[ws.value] ? ws.value : ""; ws.innerHTML = whoOptions(v, "Assign to (optional)"); }
   const all = Object.entries(S.todos).map(([id,t])=>({id,...t}));
-  const open = all.filter(t=>!t.done).sort((a,b)=>(a.created||0)-(b.created||0));
+  const open = all.filter(t=>!t.done).sort((a,b)=>todoOrder(a)-todoOrder(b));
   const done = all.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
-  const item = t => `<div class="todo ${t.done?"done":""}"><input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${esc(t.text)}</label><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`;
+  const item = t => { const who = S.people[t.who] ? t.who : "";
+    return `<div class="todo ${t.done?"done":""}" data-id="${t.id}">${t.done?`<span class="grip-sp"></span>`:`<button class="grip" data-grip="${t.id}" aria-label="Move “${esc(t.text)}”. Drag, or use the up and down arrow keys." title="Drag to reorder"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>`}<input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${esc(t.text)}</label><select class="who${who?" set":""}" data-who="${t.id}" aria-label="Assigned to">${whoOptions(who, "Unassigned")}</select><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`; };
   $("#todo-list").innerHTML = all.length
     ? open.map(item).join("") + done.map(item).join("") + (done.length?`<div class="todo-foot"><span>${done.length} done</span><button class="btn ghost small" data-act="clear-done">Clear done</button></div>`:"")
     : `<div class="empty" style="padding:36px 28px;border-top:1px solid var(--line-soft)">Nothing on your list.</div>`;
 }
-$("#todo-add").addEventListener("submit", e => { e.preventDefault(); const v=$("#todo-text").value.trim(); if(!v) return; $("#todo-text").value=""; put("todos", rid(), {text:v, done:false, created:Date.now()}); });
+$("#todo-add").addEventListener("submit", e => {
+  e.preventDefault(); const v=$("#todo-text").value.trim(); if(!v) return;
+  const who = $("#todo-who").value; const last = openTodoIds().at(-1);
+  $("#todo-text").value=""; $("#todo-who").value="";
+  put("todos", rid(), {text:v, done:false, created:Date.now(), order:Math.max(Date.now(), last ? todoOrder(S.todos[last])+1 : 0), who});
+});
+$("#todo-list").addEventListener("change", e => {
+  const id = e.target.dataset.who; if(!id || !S.todos[id]) return;
+  put("todos", id, {...S.todos[id], who:e.target.value});
+});
+// Give the moved todo an order between its new neighbours, so only it is saved.
+function placeTodo(id, ids){
+  const before = openTodoIds(); if(before.join()===ids.join()){ render(); return; }
+  const i = ids.indexOf(id), o = x => todoOrder(S.todos[x]), prev = ids[i-1], next = ids[i+1];
+  const order = prev && next ? (o(prev)+o(next))/2 : prev ? o(prev)+1000 : o(next)-1000;
+  put("todos", id, {...S.todos[id], order});
+}
+let tdrag = null;
+document.addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-grip]"); if(!g || e.button>0) return;
+  tdrag = {id:g.dataset.grip, el:g.closest(".todo")}; tdrag.el.classList.add("dragging");
+  g.setPointerCapture(e.pointerId); e.preventDefault();
+});
+document.addEventListener("pointermove", e => {
+  if(!tdrag) return; const list = $("#todo-list");
+  const others = [...list.querySelectorAll(".todo:not(.done)")].filter(x=>x!==tdrag.el);
+  const before = others.find(x=>{ const r=x.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
+  if(before){ if(tdrag.el.nextElementSibling!==before) list.insertBefore(tdrag.el, before); }
+  else if(others.length && others.at(-1).nextElementSibling!==tdrag.el) others.at(-1).after(tdrag.el);
+});
+document.addEventListener("pointerup", () => {
+  if(!tdrag) return; const {id, el} = tdrag; tdrag = null; el.classList.remove("dragging");
+  placeTodo(id, [...$("#todo-list").querySelectorAll(".todo:not(.done)")].map(x=>x.dataset.id));
+});
+$("#todo-list").addEventListener("keydown", e => {
+  const id = e.target.dataset?.grip; if(!id || (e.key!=="ArrowUp" && e.key!=="ArrowDown")) return;
+  e.preventDefault(); const ids = openTodoIds(), i = ids.indexOf(id), j = i + (e.key==="ArrowUp"?-1:1);
+  if(j<0 || j>=ids.length) return;
+  ids.splice(i,1); ids.splice(j,0,id); placeTodo(id, ids);
+  $(`[data-grip="${id}"]`)?.focus();
+});
 
 /* ---------- page events ---------- */
 document.querySelector("main").addEventListener("click", e => {
@@ -828,6 +970,9 @@ document.querySelector("main").addEventListener("click", e => {
     case "cal-prev": ui.calStart=add(ui.calStart,-28); render(); break;
     case "cal-next": ui.calStart=add(ui.calStart,28); render(); break;
     case "cal-today": ui.calStart=monday(TODAY); ui.jump=null; render(); break;
+    case "mon-prev": ui.month=addMonths(ui.month,-1); render(); break;
+    case "mon-next": ui.month=addMonths(ui.month,1); render(); break;
+    case "mon-today": ui.month=monthStart(TODAY); render(); break;
     case "res-prev": ui.resWeek=add(ui.resWeek,-7); render(); break;
     case "res-next": ui.resWeek=add(ui.resWeek,7); render(); break;
     case "res-today": ui.resWeek=monday(TODAY); ui.jump=null; render(); break;
