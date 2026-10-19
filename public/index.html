@@ -720,7 +720,6 @@ function drawSettings(){
     <div class="body">
       <div class="set-sec"><h3>Appearance</h3>
         <div class="seg" role="group" aria-label="Theme" style="align-self:flex-start">${[["light","Light"],["dark","Dark"],["system","Match system"]].map(([v,l])=>`<button data-act="theme" data-v="${v}" aria-pressed="${ui.theme===v}">${l}</button>`).join("")}</div>
-        <label class="check" for="f-demo"><input type="checkbox" id="f-demo" data-act="demo" ${ui.demo?"checked":""}><span><b>Demo mode</b><small>Scrambles names and text so you can show the board without revealing details. Changes made while it's on aren't saved.</small></span></label>
       </div>
       <div class="set-sec"><h3>Team</h3>
         <div id="team-list" class="set-sec" style="gap:10px"></div>
@@ -730,6 +729,9 @@ function drawSettings(){
         <p class="hint" style="margin:0">Holidays show as fully booked days for everyone in Resources. Leave the end date empty for a single day. To skip a holiday for someone, use the ✕ on its row in Resources.</p>
         <div id="hol-list" class="set-sec" style="gap:10px"></div>
         <form class="hol-form" id="hol-add"><input class="input" id="new-hol" placeholder="Holiday name, e.g. Deepavali" aria-label="Holiday name"><input class="input" id="new-hol-date" type="date" aria-label="Start date" title="Start date"><input class="input" id="new-hol-end" type="date" aria-label="End date (optional)" title="End date (optional)"><button class="btn dark" type="submit">Add</button></form>
+      </div>
+      <div class="set-sec">
+        <label class="check" for="f-demo"><input type="checkbox" id="f-demo" data-act="demo" ${ui.demo?"checked":""}><span><b>Demo mode</b><small>Scrambles names and text so you can show the board without revealing details. Changes made while it's on aren't saved.</small></span></label>
       </div>
       ${mode==="api" ? `<div class="set-sec"><h3>Account</h3><a class="btn" href="/logout" style="align-self:flex-start;text-decoration:none;color:var(--ink)">Sign out</a></div>` : ""}
     </div>
