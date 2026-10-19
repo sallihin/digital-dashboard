@@ -166,6 +166,10 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .rgrid tr.person td{background:var(--band);border-top:1px solid var(--line)}
 .rgrid tr.person td.we{background-image:linear-gradient(var(--weekend),var(--weekend))}
 .prs{display:flex;align-items:center;gap:10px}
+.fold{width:26px;height:26px;border:0;background:none;color:var(--faint);border-radius:7px;display:grid;place-items:center;flex:none;margin-left:-8px}
+.fold:hover{color:var(--ink);background:var(--line-soft)}
+.fold svg{width:16px;height:16px;transition:transform .15s ease}
+.fold[aria-expanded="true"] svg{transform:rotate(90deg)}
 .prs .nm{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plus{width:30px;height:30px;border-radius:9px;border:1px dashed var(--faint);background:transparent;color:var(--muted);display:grid;place-items:center;font-size:18px;line-height:1;margin-left:auto;flex:none}
 .plus:hover{border-style:solid;border-color:var(--btn-dark);color:var(--btn-dark-ink);background:var(--btn-dark)}
@@ -238,14 +242,6 @@ body.todo-dragging,body.todo-dragging *{cursor:grabbing!important}
 
 .empty{padding:56px 28px;text-align:center;color:var(--muted)}
 .empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:6px}
-
-/* Dialog */
-.dialog{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:41;width:min(480px,calc(100% - 32px));background:var(--card);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:26px 28px 22px}
-.dialog h2{font-size:20px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em}
-.dialog p{margin:0 0 10px;font-size:15px;color:var(--muted)}
-.dialog p b{color:var(--ink);font-weight:600}
-.dialog .actions{display:flex;gap:10px;align-items:center;margin-top:18px}
-.dialog .actions .spacer{flex:1}
 
 /* Side panel */
 .scrim{position:fixed;inset:0;background:rgba(10,10,14,.35);z-index:40}
@@ -357,9 +353,9 @@ const LOCK = `<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentC
 const STAR = `<svg class="star" viewBox="0 0 24 24" role="img" aria-label="Lead"><title>Lead</title><path fill="currentColor" d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9-4.4-4.1 6-.7z"/></svg>`;
 let S = {people:{},projects:{},todos:{},allocs:{},holidays:{}};
 let db = null, mode = "loading";
-const ui = { pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null, demo:false };
-try{ const s = JSON.parse(localStorage.getItem("ddd-ui")||"{}"); ["pview","resWeeks","theme","demo"].forEach(k=>{ if(s[k]!=null) ui[k]=s[k]; }); }catch(e){}
-const saveUI = () => { try{ localStorage.setItem("ddd-ui", JSON.stringify({pview:ui.pview,resWeeks:ui.resWeeks,theme:ui.theme,demo:ui.demo})); }catch(e){} };
+const ui = { pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null, demo:false, collapsed:[] };
+try{ const s = JSON.parse(localStorage.getItem("ddd-ui")||"{}"); ["pview","resWeeks","theme","demo","collapsed"].forEach(k=>{ if(s[k]!=null) ui[k]=s[k]; }); }catch(e){}
+const saveUI = () => { try{ localStorage.setItem("ddd-ui", JSON.stringify({pview:ui.pview,resWeeks:ui.resWeeks,theme:ui.theme,demo:ui.demo,collapsed:ui.collapsed})); }catch(e){} };
 
 /* ---------- theme ---------- */
 const mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -534,8 +530,8 @@ function renderProjects(){
   const start = ui.calStart, end = add(start, CAL_WEEKS*7-1);
   const head = `<div class="sec-head"><h2>Projects</h2>
       <div class="seg icons" role="group" aria-label="Project view">
-        <button data-act="pview" data-v="list" aria-pressed="${!cal && !month}" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
         <button data-act="pview" data-v="cal" aria-pressed="${cal}" aria-label="Timeline view" title="Timeline view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M8 12h12M4 18h7"/></svg></button>
+        <button data-act="pview" data-v="list" aria-pressed="${!cal && !month}" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
         <button data-act="pview" data-v="month" aria-pressed="${month}" aria-label="Month view" title="Month view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
       </div>
       <span class="spacer"></span>${cal ? dateNav("cal", start, end) : month ? monthNav() : ""}
@@ -759,7 +755,7 @@ function drawSettingsLists(){
   hl.innerHTML = hs.length ? hs.map(h=>{ const sk = (h.skip||[]).filter(pid=>S.people[pid]);
     return `<div class="hol-item"><div class="row-3"><span>${tx(h.name)}</span><span class="hol-date">${holRange(h)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>${sk.length?`<div class="hol-skip">Not for:${sk.map(pid=>`<button class="chip" data-act="hunskip" data-id="${h.id}" data-p="${pid}" title="Apply to ${tx(S.people[pid].name)} again" aria-label="Apply ${tx(h.name)} to ${tx(S.people[pid].name)} again">${tx(S.people[pid].name)} ✕</button>`).join("")}</div>`:""}</div>`; }).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
 }
-function closeOverlay(){ const done = ed && ed.onClose; ed=null; $("#overlay").innerHTML=""; if(done) done(); }
+function closeOverlay(){ ed=null; $("#overlay").innerHTML=""; }
 
 $("#settings-btn").addEventListener("click", openSettings);
 $("#overlay").addEventListener("click", e => {
@@ -770,8 +766,6 @@ $("#overlay").addEventListener("click", e => {
   if(t.dataset.c){ ed.p.color=t.dataset.c; $("#f-color").value=t.dataset.c.toLowerCase(); document.querySelectorAll("#f-colors [data-c]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.c===ed.p.color))); return; }
   const a = t.dataset.act;
   if(a==="close") closeOverlay();
-  else if(a==="clash-ow") ed.overwrite();
-  else if(a==="clash-merge") ed.merge();
   else if(a==="demo"){
     ui.demo = t.checked; saveUI(); demoCache.clear();
     if(ui.demo){ render(); toast("Demo mode on. Changes won't be saved."); }
@@ -861,9 +855,11 @@ function renderResources(){
   const thead = `<thead><tr><th class="rl"></th>${days.map(d=>{const t=new Date(D(d.date)); return `<th class="${cls(d)} ${d.date===TODAY?"today-col":""}">${WD[t.getUTCDay()]}<span class="d">${t.getUTCDate()}</span></th>`;}).join("")}</tr></thead>`;
   const body = pp.map(person=>{
     const rows = rowsFor(person.id, days);
-    let html = `<tr class="person"><td class="rl"><div class="prs"><span class="nm">${tx(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${tx(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
+    const open = !ui.collapsed.includes(person.id);
+    let html = `<tr class="person"><td class="rl"><div class="prs"><button class="fold" data-act="fold" data-p="${person.id}" aria-expanded="${open}" aria-label="${open?"Collapse":"Expand"} ${tx(person.name)}" title="${open?"Hide":"Show"} projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button><span class="nm">${tx(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${tx(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
       const l = loadOf(person.id,d.date);
       return `<td class="${cls(d)}"><div class="load" title="${fmtD(l)} day booked (${hrs(l)})"><span class="r${l>1+1e-9?" over":""}">${l?fmtD(l):"&nbsp;"}</span><span class="m"><i style="width:${Math.min(100,l*100)}%;background:${tone(l)}"></i></span></div></td>`;}).join("")}</tr>`;
+    if(!open) return html;
     hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
       html += `<tr class="hrow"><td class="rl"><div class="in"><span>${tx(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${tx(h.name)} for ${tx(person.name)}" title="Doesn't apply to ${tx(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
@@ -914,32 +910,9 @@ document.addEventListener("pointermove", e => {
 });
 document.addEventListener("pointerup", () => {
   if(!pan) return; const p = pan; pan = null; panEnded = Date.now(); document.body.classList.remove("panning");
-  if(p.kind==="row" && p.n) dropRow(p);
+  if(p.kind==="row" && p.n) put("allocs", p.key, {...p.orig, days: shiftDays(p.orig.days, p.n)});
 });
 document.addEventListener("click", e => { if(Date.now()-panEnded < 300 && e.target.closest("#resources")){ e.preventDefault(); e.stopPropagation(); } }, true);
-
-// Save a moved row, asking first if it now overlaps the person's other projects.
-function dropRow({key, orig, n}){
-  const days = shiftDays(orig.days, n), moved = {...orig, days};
-  const restore = () => { S.allocs = {...S.allocs, [key]: orig}; render(); };
-  const clashes = Object.entries(S.allocs).filter(([k,a])=>k!==key && a.personId===orig.personId && S.projects[a.projectId])
-    .map(([k,a])=>({k, a, ds:Object.keys(days).filter(d=>days[d]>0 && a.days?.[d]>0).sort()})).filter(c=>c.ds.length);
-  if(!clashes.length){ put("allocs", key, moved); return; }
-  const allDs = [...new Set(clashes.flatMap(c=>c.ds))].sort();
-  const what = projOf(orig.projectId), who = S.people[orig.personId];
-  ed = {kind:"clash", onClose: restore,
-    overwrite(){ ed.onClose = null; closeOverlay(); put("allocs", key, moved);
-      clashes.forEach(c=>{ const d2 = {...c.a.days}; c.ds.forEach(d=>delete d2[d]); put("allocs", c.k, {...c.a, days:d2}); }); toast("Moved and replaced the clashing time"); },
-    merge(){ ed.onClose = null; closeOverlay(); put("allocs", key, moved); toast("Moved; overlapping days now hold both bookings"); }};
-  $("#overlay").innerHTML = `<div class="scrim" data-act="close"></div>
-  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="cl-title" aria-describedby="cl-body">
-    <h2 id="cl-title">This clashes with other bookings</h2>
-    <div id="cl-body"><p>Moving ${tx(what.name)} for ${tx(who?.name||"")} overlaps ${clashes.map(c=>`<b>${tx(S.projects[c.a.projectId].name)}</b>`).join(", ")} on ${allDs.length} day${allDs.length>1?"s":""}: ${allDs.map(fmt).join(", ")}.</p>
-    <p class="hint"><b>Overwrite</b> removes the other bookings on those days. <b>Merge</b> keeps both.</p></div>
-    <div class="actions"><button class="btn ghost" data-act="close">Cancel</button><span class="spacer"></span><button class="btn" data-act="clash-merge">Merge</button><button class="btn dark" data-act="clash-ow">Overwrite</button></div>
-  </div>`;
-  $("#overlay .dialog .btn.dark").focus();
-}
 
 /* ---------- popovers ---------- */
 let popFor = null, popApply = null, sel = null;
@@ -1143,6 +1116,7 @@ document.querySelector("main").addEventListener("click", e => {
     case "res-next": ui.resWeek=add(ui.resWeek,7); render(); break;
     case "res-today": ui.resWeek=monday(TODAY); ui.jump=null; render(); break;
     case "res-weeks": ui.resWeeks=+v; saveUI(); render(); break;
+    case "fold": { const pid=t.dataset.p; ui.collapsed = ui.collapsed.includes(pid) ? ui.collapsed.filter(x=>x!==pid) : [...ui.collapsed, pid]; saveUI(); render(); $(`[data-act=fold][data-p="${pid}"]`)?.focus(); break; }
     case "pick-date": {
       ui.jump = t.dataset.w; render();
       const inp = $(`#jump-${ui.jump}`); if(!inp) break; inp.focus();
