@@ -866,7 +866,7 @@ function renderResources(){
     (oooVisible(person.id, days) ? [OOO, ...rows] : rows).forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
       const vals = days.map(d=>a?.days?.[d.date]||0);
-      html += `<tr class="prow"${a?` data-key="${key}"`:""}><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}">✕</button>`:""}</div></td>
+      html += `<tr class="prow"${a?` data-key="${key}"`:""}><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" ${pr.id===OOO.id?`aria-label="Clear ${tx(person.name)}'s Out of Office days shown here" title="Clear the Out of Office days shown"`:`aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}"`}>✕</button>`:""}</div></td>
         ${days.map((d,i)=>{ const inR = d.date>=pr.start && d.date<=pr.end; const v = vals[i];
           let spanCls = "", st = "";
           if(v){ spanCls = "fill" + (vals[i-1]?"":" s") + (vals[i+1]?"":" e"); st = `background:${tint(esc(pr.color), v>=1?100:v>=0.5?65:38)}`; }
@@ -1125,7 +1125,15 @@ document.querySelector("main").addEventListener("click", e => {
     case "jump-cancel": ui.jump=null; render(); break;
     case "assign": openPop(t); break;
     case "cell": if(e.detail===0){ openAllocPop(t.dataset.p, t.dataset.j, [t.dataset.d], t); } break;
-    case "unassign": del("allocs", t.dataset.k); break;
+    case "unassign": {
+      const k = t.dataset.k, a = S.allocs[k]; if(!a) break;
+      if(a.projectId!==OOO.id){ del("allocs", k); break; }
+      // Out of Office: clear only the days on screen; days elsewhere stay.
+      const shown = new Set(resDays().map(d=>d.date)), left = {};
+      Object.entries(a.days||{}).forEach(([d,v])=>{ if(!shown.has(d)) left[d]=v; });
+      delete oooOpened[a.personId];
+      if(Object.keys(left).length) put("allocs", k, {...a, days:left}); else del("allocs", k);
+      break; }
     case "hskip": { const h=S.holidays[t.dataset.id]; if(!h) break; put("holidays", t.dataset.id, {...h, skip:[...new Set([...(h.skip||[]), t.dataset.p])]}); toast(`${sc(h.name)} removed for ${S.people[t.dataset.p] ? sc(S.people[t.dataset.p].name) : "them"}. Undo in Settings.`); break; }
     case "toggle": { const td=S.todos[t.dataset.id]; put("todos", t.dataset.id, {...td, done:t.checked, doneAt:t.checked?Date.now():null}); break; }
     case "tdel": del("todos", t.dataset.id); break;
