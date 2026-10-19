@@ -67,6 +67,7 @@ footer.foot{padding-block:8px 48px;color:var(--muted);font-size:14px;text-align:
 .jump-box{display:inline-flex;align-items:center;gap:8px}
 .jump-box .input{padding:7px 10px;font-size:15px}
 .hint{font-size:14px;color:var(--faint)}
+.demo-tag{display:inline-block;vertical-align:middle;margin-left:10px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--yellow);color:var(--on-brand)}
 
 .seg{display:inline-flex;background:var(--line-soft);border-radius:12px;padding:4px;gap:2px}
 :root[data-mode="dark"] .seg{background:var(--sunk)}
@@ -312,7 +313,7 @@ body.todo-dragging,body.todo-dragging *{cursor:grabbing!important}
 
 <div class="wrap">
   <header class="top">
-    <h1>Digital Dashboard</h1>
+    <h1>Digital Dashboard <span class="demo-tag" id="demo-tag" hidden>Demo mode</span></h1>
     <div class="hdr-right">
     <button class="icon-btn" id="settings-btn" aria-label="Settings" title="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -346,9 +347,9 @@ const LOCK = `<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentC
 const STAR = `<svg class="star" viewBox="0 0 24 24" role="img" aria-label="Lead"><title>Lead</title><path fill="currentColor" d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9-4.4-4.1 6-.7z"/></svg>`;
 let S = {people:{},projects:{},todos:{},allocs:{},holidays:{}};
 let db = null, mode = "loading";
-const ui = { pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null };
-try{ const s = JSON.parse(localStorage.getItem("ddd-ui")||"{}"); ["pview","resWeeks","theme"].forEach(k=>{ if(s[k]!=null) ui[k]=s[k]; }); }catch(e){}
-const saveUI = () => { try{ localStorage.setItem("ddd-ui", JSON.stringify({pview:ui.pview,resWeeks:ui.resWeeks,theme:ui.theme})); }catch(e){} };
+const ui = { pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null, demo:false };
+try{ const s = JSON.parse(localStorage.getItem("ddd-ui")||"{}"); ["pview","resWeeks","theme","demo"].forEach(k=>{ if(s[k]!=null) ui[k]=s[k]; }); }catch(e){}
+const saveUI = () => { try{ localStorage.setItem("ddd-ui", JSON.stringify({pview:ui.pview,resWeeks:ui.resWeeks,theme:ui.theme,demo:ui.demo})); }catch(e){} };
 
 /* ---------- theme ---------- */
 const mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -378,6 +379,27 @@ ui.month = monthStart(TODAY);
 
 /* ---------- helpers ---------- */
 const esc = s => String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+/* Demo mode: user text is shown as stable gibberish of the same shape. Display only;
+   while it's on, changes stay in memory and the real data is reloaded when it's off. */
+const DEMO_SALT = Math.random().toString(36).slice(2), demoCache = new Map();
+const VOW = "aeiou", CON = "bcdfghjklmnprstvwz";
+function scrambleWord(w){
+  let h = 2166136261; for(const ch of DEMO_SALT + w){ h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const next = n => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return (h >>> 0) % n; };
+  return [...w].map(ch => {
+    const lo = ch.toLowerCase();
+    if(/[0-9]/.test(ch)) return String(next(10));
+    if(lo === ch.toUpperCase()) return ch;
+    const out = (VOW.includes(lo) ? VOW : CON)[next(VOW.includes(lo) ? VOW.length : CON.length)];
+    return ch === lo ? out : out.toUpperCase();
+  }).join("");
+}
+function sc(s){
+  s = String(s ?? ""); if(!ui.demo || !s || s===OOO.name) return s;
+  if(!demoCache.has(s)) demoCache.set(s, s.replace(/[\p{L}\p{N}]+/gu, scrambleWord));
+  return demoCache.get(s);
+}
+const tx = s => esc(sc(s));
 const rid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const $ = (s,el=document) => el.querySelector(s);
 const fmtD = n => { if(!n) return "0"; const r = Math.round(n*100)/100; return r%1===0 ? r.toFixed(0) : String(r); };
@@ -397,9 +419,9 @@ const holApplies = (h, pid) => !(h.skip||[]).includes(pid);
 const holidayOn = (date, pid) => holidays().find(h=>date>=h.date && date<=holEnd(h) && holApplies(h, pid));
 const holRange = h => holEnd(h)===h.date ? fmtY(h.date) : `${fmt(h.date)} – ${fmtY(holEnd(h))}`;
 const liveProjects = () => projects().filter(p => !(p.end && p.end < TODAY));
-const personName = id => S.people[id]?.name || "Unassigned";
+const personName = id => S.people[id] ? sc(S.people[id].name) : "Unassigned";
 const status = p => (p.start && p.start > TODAY) ? "upcoming" : "active";
-const pTitle = p => `${esc(p.name||"Untitled")}${p.ultra?" "+LOCK:""}`;
+const pTitle = p => `${tx(p.name||"Untitled")}${p.ultra?" "+LOCK:""}`;
 
 /* ---------- storage ---------- */
 const inflight = new Set(), pending = new Map();
@@ -428,6 +450,7 @@ async function api(method, path, body){
 async function loadFromApi(){ const d = await api("GET", "/api/state"); COLLS.forEach(c => { S[c] = d[c] || {}; }); render(); }
 function put(c,id,data){
   S[c] = {...S[c], [id]: data}; render();
+  if(ui.demo) return;
   const p=`${c}/${id}`;
   if(mode==="db") qwrite(p, ()=>db.doc(p).set(data));
   else if(mode==="api") qwrite(p, ()=>api("PUT", `/api/${p}`, data));
@@ -435,17 +458,24 @@ function put(c,id,data){
 }
 function del(c,id){
   const n = {...S[c]}; delete n[id]; S[c]=n; render();
+  if(ui.demo) return;
   const p=`${c}/${id}`;
   if(mode==="db") qwrite(p, ()=>db.doc(p).delete());
   else if(mode==="api") qwrite(p, ()=>api("DELETE", `/api/${p}`));
   else saveLocal();
+}
+// Drop anything changed during demo mode and show the saved data again.
+async function reloadSaved(){
+  if(mode==="api"){ try{ await loadFromApi(); }catch(e){ toast("Couldn't reload your data. Refresh the page."); } }
+  else if(mode==="local"){ S = {people:{},projects:{},todos:{},allocs:{},holidays:{}}; try{ const d = JSON.parse(localStorage.getItem("ddd-data")||"null"); if(d) S = {...S, ...d}; }catch(e){} render(); }
+  else render();
 }
 async function initStore(){
   let got = null;
   if(window.__SERVER_MODE__){
     mode = "api";
     try{ await loadFromApi(); }catch(e){ if(e.code!=="revoked") toast("Couldn't load your data. Reload to try again."); }
-    document.addEventListener("visibilitychange", () => { if(!document.hidden && inflight.size===0) loadFromApi().catch(()=>{}); });
+    document.addEventListener("visibilitychange", () => { if(!document.hidden && inflight.size===0 && !ui.demo) loadFromApi().catch(()=>{}); });
     return;
   }
   try{ if(window.claude && typeof window.claude.use==="function") got = await window.claude.use("db"); }catch(e){ got = null; }
@@ -468,6 +498,7 @@ async function initStore(){
 /* ---------- render ---------- */
 function keepScroll(el, fn){ const sx = el.querySelector(".scroll-x"); const l = sx ? sx.scrollLeft : 0; fn(); const n = el.querySelector(".scroll-x"); if(n) n.scrollLeft = l; }
 function render(){
+  $("#demo-tag").hidden = !ui.demo;
   if(mode==="loading") return;
   const P = $("#projects"), R = $("#resources");
   keepScroll(P, ()=>{ P.innerHTML = renderProjects(); });
@@ -522,7 +553,7 @@ function projectList(list){
         <td>${esc(personName(p.leadId))}</td>
         <td>${mktChips(p.markets)}</td>
         <td class="date">${fmt(p.start)} – ${fmt(p.end)}<small>${dur}</small></td>
-        <td><div class="scope">${esc(p.scope||"")}</div></td>
+        <td><div class="scope">${tx(p.scope||"")}</div></td>
       </tr>`; }).join("")}</tbody></table></div>`;
 }
 function projectCal(list){
@@ -546,7 +577,7 @@ function projectCal(list){
     if(p.start && p.end && p.end>=start && p.start<=end){
       const s = p.start<start?start:p.start, e = p.end>end?end:p.end;
       const cl = (p.start<start?" clip-l":"")+(p.end>end?" clip-r":"");
-      bar = `<div class="bar${cl}" data-bar="${p.id}" style="left:${pct(s)}%;width:${(diff(s,e)+1)/total*100}%;background:${esc(p.color)}" title="${esc(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}"><span class="h l" data-h="l"></span>${esc(p.name)}${p.ultra?LOCK:""}<span class="h r" data-h="r"></span></div>`;
+      bar = `<div class="bar${cl}" data-bar="${p.id}" style="left:${pct(s)}%;width:${(diff(s,e)+1)/total*100}%;background:${esc(p.color)}" title="${tx(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}"><span class="h l" data-h="l"></span>${tx(p.name)}${p.ultra?LOCK:""}<span class="h r" data-h="r"></span></div>`;
     }
     return `<div class="tl-row"><div class="lbl" data-act="edit" data-id="${p.id}"><b>${pTitle(p)}</b><small>${esc(personName(p.leadId))}${(p.markets||[]).length?" · "+mktList(p.markets).join(" "):""}</small></div><div class="track" data-track>${grid}${todayLine}${bar}</div></div>`;
   }).join("");
@@ -585,11 +616,11 @@ function projectMonth(){
   const first = ui.month, last = add(addMonths(first,1),-1);
   const gs = monday(first), ge = add(monday(last),6);
   const items = [
-    ...holidays().map(h=>({s:h.date, e:holEnd(h), k:0, cls:"hol", label:esc(h.name), title:`${esc(h.name)} · Holiday`})),
-    ...oooRuns().map(r=>{ const nm = esc(S.people[r.pid].name), hrs = r.v<1 ? ` ${fmtD(r.v*HOURS_PER_DAY)}h` : "";
+    ...holidays().map(h=>({s:h.date, e:holEnd(h), k:0, cls:"hol", label:tx(h.name), title:`${tx(h.name)} · Holiday`})),
+    ...oooRuns().map(r=>{ const nm = tx(S.people[r.pid].name), hrs = r.v<1 ? ` ${fmtD(r.v*HOURS_PER_DAY)}h` : "";
       return {s:r.s, e:r.e, k:1, cls:"ooo", label:`${nm} · Out of Office${hrs}`, title:`${nm} · Out of Office${hrs}`}; }),
     ...projects().filter(p=>p.start && p.end).map(p=>({s:p.start, e:p.end, k:2, cls:"proj", id:p.id, color:p.color,
-      label:`${esc(p.name)}${p.ultra?LOCK:""}`, title:`${esc(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}`}))
+      label:`${tx(p.name)}${p.ultra?LOCK:""}`, title:`${tx(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}`}))
   ].filter(it=>it.e>=gs && it.s<=ge).sort((a,b)=>a.k-b.k || a.s.localeCompare(b.s) || b.e.localeCompare(a.e));
   let weeks = "";
   for(let w=gs; w<=ge; w=add(w,7)){
@@ -636,7 +667,7 @@ document.addEventListener("pointermove", e => {
 document.addEventListener("pointerup", () => {
   if(!drag) return; const d = drag; drag = null;
   if(!d.moved){ openEditor(d.id); return; }
-  if(d.ns && (d.ns!==d.s || d.ne!==d.e)){ put("projects", d.id, {...S.projects[d.id], start:d.ns, end:d.ne}); toast(`${S.projects[d.id].name}: ${fmt(d.ns)} – ${fmt(d.ne)}`); }
+  if(d.ns && (d.ns!==d.s || d.ne!==d.e)){ put("projects", d.id, {...S.projects[d.id], start:d.ns, end:d.ne}); toast(`${sc(S.projects[d.id].name)}: ${fmt(d.ns)} – ${fmt(d.ne)}`); }
   else render();
 });
 
@@ -654,18 +685,18 @@ function drawEditor(){
   <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="ed-title">
     <header><h2 id="ed-title">${id?"Edit project":"New project"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></header>
     <div class="body">
-      <div class="field"><label class="label" for="f-name">Project name</label><input class="input" id="f-name" value="${esc(p.name)}" placeholder="e.g. 11.11 campaign site"></div>
+      <div class="field"><label class="label" for="f-name">Project name</label><input class="input" id="f-name" value="${tx(p.name)}" placeholder="e.g. 11.11 campaign site"></div>
       <label class="check" for="f-ultra"><input type="checkbox" id="f-ultra" ${p.ultra?"checked":""}><span><b>Ultra ${LOCK}</b></span></label>
       <div class="two">
         <div class="field"><label class="label" for="f-start">Start</label><input class="input" type="date" id="f-start" value="${esc(p.start)}"></div>
         <div class="field"><label class="label" for="f-end">End</label><input class="input" type="date" id="f-end" value="${esc(p.end)}"></div>
       </div>
       <div class="field"><label class="label" for="f-lead">Lead</label>
-        <select class="input" id="f-lead"><option value="">Unassigned</option>${pp.map(x=>`<option value="${x.id}" ${p.leadId===x.id?"selected":""}>${esc(x.name)}</option>`).join("")}<option value="__new">+ Add a new person…</option></select>
+        <select class="input" id="f-lead"><option value="">Unassigned</option>${pp.map(x=>`<option value="${x.id}" ${p.leadId===x.id?"selected":""}>${tx(x.name)}</option>`).join("")}<option value="__new">+ Add a new person…</option></select>
         <input class="input" id="f-newlead" placeholder="New person's name" hidden>
       </div>
       <div class="field"><span class="label">Markets</span><div class="mkt-pick" id="f-mkts">${MARKETS.map(m=>`<button type="button" data-m="${m}" aria-pressed="${(p.markets||[]).includes(m)}">${m}</button>`).join("")}<button type="button" data-m="__all" aria-pressed="false">All</button></div></div>
-      <div class="field"><label class="label" for="f-scope">Scope</label><textarea class="input" id="f-scope" rows="5" placeholder="Deliverables, channels, what's in and out">${esc(p.scope)}</textarea></div>
+      <div class="field"><label class="label" for="f-scope">Scope</label><textarea class="input" id="f-scope" rows="5" placeholder="Deliverables, channels, what's in and out">${tx(p.scope)}</textarea></div>
       <div class="field"><span class="label">Bar colour</span><div class="colors" id="f-colors">${PALETTE.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-pressed="${(p.color||"").toUpperCase()===c}" aria-label="Colour ${c}"></button>`).join("")}<input type="color" id="f-color" value="${esc((p.color||"#FF4FA3").toLowerCase())}" aria-label="Custom colour"></div></div>
     </div>
     <footer>
@@ -689,6 +720,7 @@ function drawSettings(){
     <div class="body">
       <div class="set-sec"><h3>Appearance</h3>
         <div class="seg" role="group" aria-label="Theme" style="align-self:flex-start">${[["light","Light"],["dark","Dark"],["system","Match system"]].map(([v,l])=>`<button data-act="theme" data-v="${v}" aria-pressed="${ui.theme===v}">${l}</button>`).join("")}</div>
+        <label class="check" for="f-demo"><input type="checkbox" id="f-demo" data-act="demo" ${ui.demo?"checked":""}><span><b>Demo mode</b><small>Scrambles names and text so you can show the board without revealing details. Changes made while it's on aren't saved.</small></span></label>
       </div>
       <div class="set-sec"><h3>Team</h3>
         <div id="team-list" class="set-sec" style="gap:10px"></div>
@@ -709,11 +741,11 @@ function drawSettingsLists(){
   const active = document.activeElement && document.activeElement.id;
   const pp = people();
   if(!(active && active.startsWith("pn-"))){
-    tl.innerHTML = pp.length ? pp.map(p=>`<div class="row-2"><input class="input" id="pn-${p.id}" data-act="pname" data-id="${p.id}" value="${esc(p.name)}" aria-label="Name"><button class="btn small danger" data-act="pdel" data-id="${p.id}">Remove</button></div>`).join("") : `<p class="hint" style="margin:0">No one here yet.</p>`;
+    tl.innerHTML = pp.length ? pp.map(p=>`<div class="row-2"><input class="input" id="pn-${p.id}" data-act="pname" data-id="${p.id}" value="${tx(p.name)}" aria-label="Name"><button class="btn small danger" data-act="pdel" data-id="${p.id}">Remove</button></div>`).join("") : `<p class="hint" style="margin:0">No one here yet.</p>`;
   }
   const hs = holidays();
   hl.innerHTML = hs.length ? hs.map(h=>{ const sk = (h.skip||[]).filter(pid=>S.people[pid]);
-    return `<div class="hol-item"><div class="row-3"><span>${esc(h.name)}</span><span class="hol-date">${holRange(h)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>${sk.length?`<div class="hol-skip">Not for:${sk.map(pid=>`<button class="chip" data-act="hunskip" data-id="${h.id}" data-p="${pid}" title="Apply to ${esc(S.people[pid].name)} again" aria-label="Apply ${esc(h.name)} to ${esc(S.people[pid].name)} again">${esc(S.people[pid].name)} ✕</button>`).join("")}</div>`:""}</div>`; }).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
+    return `<div class="hol-item"><div class="row-3"><span>${tx(h.name)}</span><span class="hol-date">${holRange(h)}</span><button class="btn small danger" data-act="hdel" data-id="${h.id}">Remove</button></div>${sk.length?`<div class="hol-skip">Not for:${sk.map(pid=>`<button class="chip" data-act="hunskip" data-id="${h.id}" data-p="${pid}" title="Apply to ${tx(S.people[pid].name)} again" aria-label="Apply ${tx(h.name)} to ${tx(S.people[pid].name)} again">${tx(S.people[pid].name)} ✕</button>`).join("")}</div>`:""}</div>`; }).join("") : `<p class="hint" style="margin:0">No holidays added.</p>`;
 }
 function closeOverlay(){ ed=null; $("#overlay").innerHTML=""; }
 
@@ -726,6 +758,11 @@ $("#overlay").addEventListener("click", e => {
   if(t.dataset.c){ ed.p.color=t.dataset.c; $("#f-color").value=t.dataset.c.toLowerCase(); document.querySelectorAll("#f-colors [data-c]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.c===ed.p.color))); return; }
   const a = t.dataset.act;
   if(a==="close") closeOverlay();
+  else if(a==="demo"){
+    ui.demo = t.checked; saveUI(); demoCache.clear();
+    if(ui.demo){ render(); toast("Demo mode on. Changes won't be saved."); }
+    else { reloadSaved(); toast("Demo mode off"); }
+  }
   else if(a==="theme"){ ui.theme=t.dataset.v; saveUI(); applyTheme(); document.querySelectorAll("[data-act=theme]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.v===ui.theme))); }
   else if(a==="ed-del"){
     if(!ed.confirmDel){ readEditor(); ed.confirmDel=true; drawEditor(); return; }
@@ -803,20 +840,20 @@ function renderResources(){
   const thead = `<thead><tr><th class="rl"></th>${days.map(d=>{const t=new Date(D(d.date)); return `<th class="${cls(d)} ${d.date===TODAY?"today-col":""}">${WD[t.getUTCDay()]}<span class="d">${t.getUTCDate()}</span></th>`;}).join("")}</tr></thead>`;
   const body = pp.map(person=>{
     const rows = rowsFor(person.id, days);
-    let html = `<tr class="person"><td class="rl"><div class="prs"><span class="nm">${esc(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${esc(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
+    let html = `<tr class="person"><td class="rl"><div class="prs"><span class="nm">${tx(person.name)}</span><button class="plus" data-act="assign" data-p="${person.id}" aria-label="Add a project for ${tx(person.name)}" title="Add a project">+</button></div></td>${days.map(d=>{
       const l = loadOf(person.id,d.date);
       return `<td class="${cls(d)}"><div class="load" title="${fmtD(l)} day booked (${hrs(l)})"><span class="r${l>1+1e-9?" over":""}">${l?fmtD(l):"&nbsp;"}</span><span class="m"><i style="width:${Math.min(100,l*100)}%;background:${tone(l)}"></i></span></div></td>`;}).join("")}</tr>`;
     hols.filter(h=>holApplies(h, person.id)).forEach(h=>{
-      html += `<tr class="hrow"><td class="rl"><div class="in"><span>${esc(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${esc(h.name)} for ${esc(person.name)}" title="Doesn't apply to ${esc(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
+      html += `<tr class="hrow"><td class="rl"><div class="in"><span>${tx(h.name)}</span><span class="tag">Holiday</span><span class="grow"></span><button class="x" data-act="hskip" data-id="${h.id}" data-p="${person.id}" aria-label="Remove ${tx(h.name)} for ${tx(person.name)}" title="Doesn't apply to ${tx(person.name)}">✕</button></div></td>${days.map(d=>`<td class="${cls(d)}">${d.date>=h.date && d.date<=holEnd(h)?`<div class="hcell"><span>Off</span></div>`:""}</td>`).join("")}</tr>`;
     });
     (S.allocs[`${person.id}__${OOO.id}`] ? [OOO, ...rows] : rows).forEach(pr=>{
       const key = `${person.id}__${pr.id}`; const a = S.allocs[key];
       const vals = days.map(d=>a?.days?.[d.date]||0);
-      html += `<tr class="prow"><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${esc(pr.name)}">${esc(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${esc(pr.name)} from ${esc(person.name)}">✕</button>`:""}</div></td>
+      html += `<tr class="prow"><td class="rl"><div class="in"><span class="swatch" style="background:${esc(pr.color)}"></span><span class="pn" title="${tx(pr.name)}">${tx(pr.name)}</span>${pr.ultra?LOCK:""}<span class="grow"></span>${pr.leadId===person.id?STAR:""}${a?`<button class="x" data-act="unassign" data-k="${key}" aria-label="Remove ${tx(pr.name)} from ${tx(person.name)}">✕</button>`:""}</div></td>
         ${days.map((d,i)=>{ const inR = d.date>=pr.start && d.date<=pr.end; const v = vals[i];
           let spanCls = "", st = "";
           if(v){ spanCls = "fill" + (vals[i-1]?"":" s") + (vals[i+1]?"":" e"); st = `background:${tint(esc(pr.color), v>=1?100:v>=0.5?65:38)}`; }
-          return `<td class="${cls(d)}"><button class="cell${inR?"":" off"}" data-act="cell" data-p="${person.id}" data-j="${pr.id}" data-d="${d.date}" aria-label="${esc(pr.name)}, ${d.date}: ${fmtD(v*HOURS_PER_DAY)} hours"><span class="${spanCls}" style="${st}">${v?hrs(v):""}</span></button></td>`; }).join("")}</tr>`;
+          return `<td class="${cls(d)}"><button class="cell${inR?"":" off"}" data-act="cell" data-p="${person.id}" data-j="${pr.id}" data-d="${d.date}" aria-label="${tx(pr.name)}, ${d.date}: ${fmtD(v*HOURS_PER_DAY)} hours"><span class="${spanCls}" style="${st}">${v?hrs(v):""}</span></button></td>`; }).join("")}</tr>`;
     });
     return html;
   }).join("");
@@ -835,7 +872,7 @@ function openPop(btn){
   const r = btn.getBoundingClientRect();
   const left = Math.max(16, Math.min(r.left, window.innerWidth-356));
   $("#popover").innerHTML = `<div class="pop" style="left:${left}px;top:${r.bottom+8}px" role="menu">
-    <div class="ph">Add ${esc(S.people[pid]?.name||"")} to</div>
+    <div class="ph">Add ${tx(S.people[pid]?.name||"")} to</div>
     ${avail.length ? avail.map(p=>`<button role="menuitem" data-pick="${p.id}"><span class="swatch" style="background:${esc(p.color)}"></span>${pTitle(p)}</button>`).join("") : `<div class="none">Already on every current project.</div>`}
     ${S.allocs[`${pid}__${OOO.id}`] ? "" : `<div class="sep" role="separator"></div><button role="menuitem" data-pick="${OOO.id}"><span class="swatch" style="background:${OOO.color}"></span>${OOO.name}</button>`}
   </div>`;
@@ -893,7 +930,7 @@ function openAllocPop(p, j, dates, anchor){
   const below = r.bottom + 8, top = (below + 330 > window.innerHeight && r.top > 340) ? r.top - 8 - 322 : below;
   const range = n===1 ? fmtY(dates[0]) : `${fmt(dates[0])} – ${fmt(dates[n-1])}`;
   $("#popover").innerHTML = `<div class="pop" style="left:${left}px;top:${top}px;width:${w}px" role="dialog" aria-label="Set time">
-    <div class="sel-head">${esc(S.people[p]?.name||"")} · ${esc(pr.name)}</div>
+    <div class="sel-head">${tx(S.people[p]?.name||"")} · ${tx(pr.name)}</div>
     <div class="sel-sub">${range} · ${n} day${n>1?"s":""}${outN?` (${outN} outside project dates)`:""}</div>
     <div class="opts">
       ${[0.25,0.5,0.75,1].map(v=>`<button data-amt="${v}">${hrs(v)}<small>${v} day</small></button>`).join("")}
@@ -913,14 +950,14 @@ function openAllocPop(p, j, dates, anchor){
 /* ---------- todos ---------- */
 const todoOrder = t => t.order ?? t.created ?? 0;
 const openTodoIds = () => Object.entries(S.todos).filter(([,t])=>!t.done).sort(([,a],[,b])=>todoOrder(a)-todoOrder(b)).map(([id])=>id);
-function whoOptions(sel, none){ return `<option value="">${none}</option>` + people().map(p=>`<option value="${p.id}"${p.id===sel?" selected":""}>${esc(p.name)}</option>`).join(""); }
+function whoOptions(sel, none){ return `<option value="">${none}</option>` + people().map(p=>`<option value="${p.id}"${p.id===sel?" selected":""}>${tx(p.name)}</option>`).join(""); }
 function renderTodos(){
   if(tdrag && tdrag.started) return;
   const all = Object.entries(S.todos).map(([id,t])=>({id,...t}));
   const open = all.filter(t=>!t.done).sort((a,b)=>todoOrder(a)-todoOrder(b));
   const done = all.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
   const item = t => { const who = S.people[t.who] ? t.who : "";
-    return `<div class="todo ${t.done?"done":""}" data-id="${t.id}">${t.done?`<span class="grip-sp"></span>`:`<button class="grip" data-grip="${t.id}" aria-label="Move “${esc(t.text)}”. Drag, or use the up and down arrow keys." title="Drag to reorder"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>`}<input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${esc(t.text)}</label><span class="who-w${who?" set":""}"><select class="who" data-who="${t.id}" aria-label="Assigned to">${whoOptions(who, "Unassigned")}</select></span><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`; };
+    return `<div class="todo ${t.done?"done":""}" data-id="${t.id}">${t.done?`<span class="grip-sp"></span>`:`<button class="grip" data-grip="${t.id}" aria-label="Move “${tx(t.text)}”. Drag, or use the up and down arrow keys." title="Drag to reorder"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>`}<input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${tx(t.text)}</label><span class="who-w${who?" set":""}"><select class="who" data-who="${t.id}" aria-label="Assigned to">${whoOptions(who, "Unassigned")}</select></span><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`; };
   $("#todo-list").innerHTML = all.length
     ? open.map(item).join("") + done.map(item).join("") + (done.length?`<div class="todo-foot"><span>${done.length} done</span><button class="btn ghost small" data-act="clear-done">Clear done</button></div>`:"")
     : `<div class="empty" style="padding:36px 28px;border-top:1px solid var(--line-soft)">Nothing on your list.</div>`;
@@ -1032,7 +1069,7 @@ document.querySelector("main").addEventListener("click", e => {
     case "assign": openPop(t); break;
     case "cell": if(e.detail===0){ openAllocPop(t.dataset.p, t.dataset.j, [t.dataset.d], t); } break;
     case "unassign": del("allocs", t.dataset.k); break;
-    case "hskip": { const h=S.holidays[t.dataset.id]; if(!h) break; put("holidays", t.dataset.id, {...h, skip:[...new Set([...(h.skip||[]), t.dataset.p])]}); toast(`${h.name} removed for ${S.people[t.dataset.p]?.name||"them"}. Undo in Settings.`); break; }
+    case "hskip": { const h=S.holidays[t.dataset.id]; if(!h) break; put("holidays", t.dataset.id, {...h, skip:[...new Set([...(h.skip||[]), t.dataset.p])]}); toast(`${sc(h.name)} removed for ${S.people[t.dataset.p] ? sc(S.people[t.dataset.p].name) : "them"}. Undo in Settings.`); break; }
     case "toggle": { const td=S.todos[t.dataset.id]; put("todos", t.dataset.id, {...td, done:t.checked, doneAt:t.checked?Date.now():null}); break; }
     case "tdel": del("todos", t.dataset.id); break;
     case "clear-done": Object.entries(S.todos).filter(([,x])=>x.done).forEach(([id])=>del("todos",id)); break;
