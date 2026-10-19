@@ -198,6 +198,8 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 .hcell{display:flex;align-items:center;justify-content:center;height:100%;padding:9px 4px}
 .hcell span{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:9px;background:var(--holiday);color:var(--muted);font-size:12px;font-weight:600}
 .state-ok{color:var(--ok-ink)}.state-full{color:var(--full-ink)}.state-over{color:var(--over-ink)}
+body.pan-ready .rgrid,body.pan-ready .rgrid *{cursor:grab!important}
+body.panning,body.panning *{cursor:grabbing!important;user-select:none}
 .legend{display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin-top:18px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
 
@@ -821,7 +823,7 @@ $("#overlay").addEventListener("submit", e => {
 });
 
 /* ---------- resources ---------- */
-function resDays(){ const out=[]; for(let i=0;i<ui.resWeeks*7;i++){ const d=add(ui.resWeek,i); out.push({date:d, we:[0,6].includes(dow(d)), wkStart:i>0 && i%7===0}); } return out; }
+function resDays(){ const out=[]; for(let i=0;i<ui.resWeeks*7;i++){ const d=add(ui.resWeek,i); out.push({date:d, we:[0,6].includes(dow(d)), wkStart:i>0 && dow(d)===1}); } return out; }
 function loadOf(pid, date){ let s = holidayOn(date, pid) ? 1 : 0; for(const a of Object.values(S.allocs)) if(a.personId===pid && projOf(a.projectId)) s += (a.days?.[date]||0); return s; }
 function tone(load){ return load===0 ? "transparent" : load>1+1e-9 ? "var(--red)" : "var(--green)"; }
 function stateCls(load){ return load>1+1e-9 ? "state-over" : load>=1-1e-9 ? "state-full" : load>0 ? "state-ok" : ""; }
@@ -860,8 +862,32 @@ function renderResources(){
     return html;
   }).join("");
   return head + `<div class="panel scroll-x"><table class="rgrid">${thead}<tbody>${body}</tbody></table></div>
-    <div class="legend"><span>Click or drag across days to set time</span><span><i style="background:var(--green)"></i>Good</span><span><i style="background:var(--red)"></i>Overbooked</span><span>Striped = outside project dates</span></div>`;
+    <div class="legend"><span>Click or drag across days to set time</span><span>Hold Shift and drag to move through dates</span><span><i style="background:var(--green)"></i>Good</span><span><i style="background:var(--red)"></i>Overbooked</span><span>Striped = outside project dates</span></div>`;
 }
+
+/* Shift + drag pans the resource grid one day per column dragged. */
+let pan = null;
+const setPanReady = on => document.body.classList.toggle("pan-ready", on);
+document.addEventListener("keydown", e => { if(e.key==="Shift") setPanReady(true); });
+document.addEventListener("keyup", e => { if(e.key==="Shift") setPanReady(false); });
+window.addEventListener("blur", () => setPanReady(false));
+document.addEventListener("pointerdown", e => {
+  if(!e.shiftKey || e.button>0) return;
+  const grid = e.target.closest(".rgrid"); if(!grid) return;
+  const col = grid.querySelector("thead th:not(.rl)"); if(!col) return;
+  closePop();
+  pan = {x:e.clientX, start:ui.resWeek, w:col.getBoundingClientRect().width, n:0};
+  document.body.classList.add("panning"); e.preventDefault();
+});
+document.addEventListener("pointermove", e => {
+  if(!pan) return;
+  const n = Math.round((pan.x - e.clientX) / pan.w); if(n===pan.n) return;
+  pan.n = n; ui.resWeek = add(pan.start, n);
+  const R = $("#resources"); keepScroll(R, ()=>{ R.innerHTML = renderResources(); });
+});
+let panEnded = 0;
+document.addEventListener("pointerup", () => { if(!pan) return; panEnded = Date.now(); pan = null; document.body.classList.remove("panning"); });
+document.addEventListener("click", e => { if(Date.now()-panEnded < 300 && e.target.closest("#resources")){ e.preventDefault(); e.stopPropagation(); } }, true);
 
 /* ---------- popovers ---------- */
 let popFor = null, popApply = null, sel = null;
@@ -903,7 +929,7 @@ function paintSel(){
   cs.forEach((c,i)=>{ if(i>=a && i<=b) c.classList.add("sel"); });
 }
 document.addEventListener("pointerdown", e => {
-  const c = e.target.closest(".cell"); if(!c || e.button>0) return;
+  const c = e.target.closest(".cell"); if(!c || e.button>0 || e.shiftKey) return;
   closePop();
   const cs = cellsOf(c.dataset.p, c.dataset.j); const i = cs.indexOf(c);
   sel = { p:c.dataset.p, j:c.dataset.j, a:i, b:i, active:true };
