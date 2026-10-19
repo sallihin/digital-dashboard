@@ -203,17 +203,27 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
 /* Todos */
 .todo-add{display:flex;gap:12px;padding:24px 28px}
 .todo-add input{flex:1;min-width:0}
-.todo-add select{max-width:220px;min-width:0;color:var(--muted)}
 .todo .grip{border:0;background:none;color:var(--faint);cursor:grab;padding:0;width:20px;height:24px;flex:none;display:grid;place-items:center;touch-action:none;opacity:.45;border-radius:6px}
 .todo .grip svg{width:16px;height:16px}
 .todo:hover .grip,.todo .grip:focus-visible{opacity:1}
 .todo .grip-sp{width:20px;flex:none}
-.todo.dragging{background:var(--sunk);box-shadow:0 6px 20px rgba(0,0,0,.12);position:relative;z-index:2}
-.todo.dragging .grip{cursor:grabbing}
-.todo .who{border:0;background:var(--sunk);color:var(--muted);font-size:13px;font-weight:600;padding:3px 8px;border-radius:7px;max-width:160px;flex:none;cursor:pointer}
-.todo .who:not(.set){opacity:0}
-.todo:hover .who,.todo .who:focus-visible{opacity:1}
-.todo.done .who.set{opacity:.6}
+#todo-list{position:relative}
+#todo-list .todo:not(.done){user-select:none;-webkit-user-select:none}
+.todo .who-w{position:relative;display:inline-flex;flex:none;color:var(--muted);margin-top:-3px}
+.todo .who-w::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.todo .who{appearance:none;-webkit-appearance:none;border:0;background:var(--sunk);color:inherit;font-size:13px;font-weight:600;line-height:1.4;padding:6px 34px 6px 12px;border-radius:9px;max-width:200px;cursor:pointer;text-overflow:ellipsis}
+.todo .who-w:hover{color:var(--ink)}
+.todo .who-w:not(.set){opacity:0}
+.todo:hover .who-w,.todo .who-w:focus-within{opacity:1}
+.todo.done .who-w.set{opacity:.6}
+.todo.todo-ph{background:var(--sunk)}
+.todo.todo-ph > *{opacity:.3}
+.todo-float{position:fixed;z-index:70;margin:0;display:flex;align-items:flex-start;gap:16px;padding:18px 28px;background:var(--card);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.08);pointer-events:none;transform:scale(1.02)}
+.todo-float .grip{opacity:1}
+.todo-float .who-w.set{opacity:1}
+.todo-float .who-w:not(.set){opacity:0}
+.todo-float.landing{transition:left .16s ease,top .16s ease,transform .16s ease;transform:scale(1)}
+body.todo-dragging,body.todo-dragging *{cursor:grabbing!important}
 #todo-list .todo{display:flex;align-items:flex-start;gap:16px;padding:18px 28px;border-top:1px solid var(--line-soft)}
 .todo input[type=checkbox]{width:22px;height:22px;accent-color:var(--hot);flex:none;margin-top:1px}
 .todo .t{flex:1;min-width:0;overflow-wrap:anywhere;cursor:pointer;font-size:16px}
@@ -292,10 +302,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
   .row-3{grid-template-columns:1fr 1fr}
   .row-3 .btn{grid-column:1/-1}
   .todo-add,#todo-list .todo,.todo-foot{padding-left:18px;padding-right:18px}
-  .todo-add{flex-wrap:wrap}
-  .todo-add input{flex-basis:100%}
-  .todo-add select{flex:1;max-width:none}
-  .todo .who:not(.set){opacity:1}
+  .todo .who-w:not(.set){opacity:1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -318,7 +325,7 @@ table.rgrid{border-collapse:separate;border-spacing:0;width:100%;user-select:non
     <section id="todos">
       <div class="sec-head"><h2>Todo</h2></div>
       <div class="panel">
-        <form class="todo-add" id="todo-add"><input class="input" id="todo-text" placeholder="Add a todo" autocomplete="off" aria-label="New todo"><select class="input" id="todo-who" aria-label="Assign to (optional)"></select><button class="btn dark" type="submit">Add</button></form>
+        <form class="todo-add" id="todo-add"><input class="input" id="todo-text" placeholder="Add a todo" autocomplete="off" aria-label="New todo"><button class="btn dark" type="submit">Add</button></form>
         <div id="todo-list"></div>
       </div>
     </section>
@@ -908,21 +915,21 @@ const todoOrder = t => t.order ?? t.created ?? 0;
 const openTodoIds = () => Object.entries(S.todos).filter(([,t])=>!t.done).sort(([,a],[,b])=>todoOrder(a)-todoOrder(b)).map(([id])=>id);
 function whoOptions(sel, none){ return `<option value="">${none}</option>` + people().map(p=>`<option value="${p.id}"${p.id===sel?" selected":""}>${esc(p.name)}</option>`).join(""); }
 function renderTodos(){
-  const ws = $("#todo-who"); if(ws){ const v = S.people[ws.value] ? ws.value : ""; ws.innerHTML = whoOptions(v, "Assign to (optional)"); }
+  if(tdrag && tdrag.started) return;
   const all = Object.entries(S.todos).map(([id,t])=>({id,...t}));
   const open = all.filter(t=>!t.done).sort((a,b)=>todoOrder(a)-todoOrder(b));
   const done = all.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
   const item = t => { const who = S.people[t.who] ? t.who : "";
-    return `<div class="todo ${t.done?"done":""}" data-id="${t.id}">${t.done?`<span class="grip-sp"></span>`:`<button class="grip" data-grip="${t.id}" aria-label="Move “${esc(t.text)}”. Drag, or use the up and down arrow keys." title="Drag to reorder"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>`}<input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${esc(t.text)}</label><select class="who${who?" set":""}" data-who="${t.id}" aria-label="Assigned to">${whoOptions(who, "Unassigned")}</select><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`; };
+    return `<div class="todo ${t.done?"done":""}" data-id="${t.id}">${t.done?`<span class="grip-sp"></span>`:`<button class="grip" data-grip="${t.id}" aria-label="Move “${esc(t.text)}”. Drag, or use the up and down arrow keys." title="Drag to reorder"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>`}<input type="checkbox" id="td-${t.id}" data-act="toggle" data-id="${t.id}" ${t.done?"checked":""}><label class="t" for="td-${t.id}">${esc(t.text)}</label><span class="who-w${who?" set":""}"><select class="who" data-who="${t.id}" aria-label="Assigned to">${whoOptions(who, "Unassigned")}</select></span><button class="x" data-act="tdel" data-id="${t.id}" aria-label="Delete todo">✕</button></div>`; };
   $("#todo-list").innerHTML = all.length
     ? open.map(item).join("") + done.map(item).join("") + (done.length?`<div class="todo-foot"><span>${done.length} done</span><button class="btn ghost small" data-act="clear-done">Clear done</button></div>`:"")
     : `<div class="empty" style="padding:36px 28px;border-top:1px solid var(--line-soft)">Nothing on your list.</div>`;
 }
 $("#todo-add").addEventListener("submit", e => {
   e.preventDefault(); const v=$("#todo-text").value.trim(); if(!v) return;
-  const who = $("#todo-who").value; const last = openTodoIds().at(-1);
-  $("#todo-text").value=""; $("#todo-who").value="";
-  put("todos", rid(), {text:v, done:false, created:Date.now(), order:Math.max(Date.now(), last ? todoOrder(S.todos[last])+1 : 0), who});
+  const last = openTodoIds().at(-1);
+  $("#todo-text").value="";
+  put("todos", rid(), {text:v, done:false, created:Date.now(), order:Math.max(Date.now(), last ? todoOrder(S.todos[last])+1 : 0), who:""});
 });
 $("#todo-list").addEventListener("change", e => {
   const id = e.target.dataset.who; if(!id || !S.todos[id]) return;
@@ -935,23 +942,62 @@ function placeTodo(id, ids){
   const order = prev && next ? (o(prev)+o(next))/2 : prev ? o(prev)+1000 : o(next)-1000;
   put("todos", id, {...S.todos[id], order});
 }
-let tdrag = null;
+/* Drag an open todo by its row or handle: a copy follows the pointer, a greyed
+   placeholder holds its slot, and the other rows slide out of the way. */
+let tdrag = null, tdragEnded = 0;
+const openRows = () => [...$("#todo-list").querySelectorAll(".todo:not(.done)")];
 document.addEventListener("pointerdown", e => {
-  const g = e.target.closest("[data-grip]"); if(!g || e.button>0) return;
-  tdrag = {id:g.dataset.grip, el:g.closest(".todo")}; tdrag.el.classList.add("dragging");
-  g.setPointerCapture(e.pointerId); e.preventDefault();
+  if(e.button>0) return;
+  const el = e.target.closest("#todo-list .todo:not(.done)");
+  if(!el || e.target.closest("input,select,.x")) return;
+  tdrag = {id:el.dataset.id, el, x0:e.clientX, y0:e.clientY, started:false};
+  if(e.target.closest("[data-grip]")) e.preventDefault();
 });
+function startTodoDrag(){
+  const d = tdrag, r = d.el.getBoundingClientRect();
+  d.dx = d.x0 - r.left; d.dy = d.y0 - r.top;
+  const f = d.el.cloneNode(true); f.classList.add("todo-float"); f.removeAttribute("data-id");
+  Object.assign(f.style, {left:r.left+"px", top:r.top+"px", width:r.width+"px"});
+  document.body.appendChild(f); d.float = f;
+  d.el.classList.add("todo-ph"); document.body.classList.add("todo-dragging");
+  d.started = true;
+}
+function slideRows(move){
+  const rows = openRows(), first = new Map(rows.map(x=>[x, x.getBoundingClientRect().top]));
+  move();
+  rows.forEach(x=>{
+    x.style.transition = "none"; x.style.transform = "";
+    const dy = first.get(x) - x.getBoundingClientRect().top; if(!dy) return;
+    x.style.transform = `translateY(${dy}px)`; x.offsetHeight;
+    x.style.transition = "transform .18s ease"; x.style.transform = "";
+  });
+}
 document.addEventListener("pointermove", e => {
-  if(!tdrag) return; const list = $("#todo-list");
-  const others = [...list.querySelectorAll(".todo:not(.done)")].filter(x=>x!==tdrag.el);
-  const before = others.find(x=>{ const r=x.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
-  if(before){ if(tdrag.el.nextElementSibling!==before) list.insertBefore(tdrag.el, before); }
-  else if(others.length && others.at(-1).nextElementSibling!==tdrag.el) others.at(-1).after(tdrag.el);
+  if(!tdrag) return;
+  if(!tdrag.started){ if(Math.hypot(e.clientX-tdrag.x0, e.clientY-tdrag.y0) < 5) return; startTodoDrag(); }
+  const d = tdrag, list = $("#todo-list");
+  d.float.style.left = (e.clientX-d.dx)+"px"; d.float.style.top = (e.clientY-d.dy)+"px";
+  const y = e.clientY - list.getBoundingClientRect().top;
+  const others = openRows().filter(x=>x!==d.el);
+  const before = others.find(x=>y < x.offsetTop + x.offsetHeight/2);
+  if(before){ if(d.el.nextElementSibling!==before) slideRows(()=>list.insertBefore(d.el, before)); }
+  else if(others.length && others.at(-1).nextElementSibling!==d.el) slideRows(()=>others.at(-1).after(d.el));
 });
-document.addEventListener("pointerup", () => {
-  if(!tdrag) return; const {id, el} = tdrag; tdrag = null; el.classList.remove("dragging");
-  placeTodo(id, [...$("#todo-list").querySelectorAll(".todo:not(.done)")].map(x=>x.dataset.id));
-});
+function endTodoDrag(){
+  if(!tdrag) return; const d = tdrag; tdrag = null; if(!d.started) return;
+  tdragEnded = Date.now();
+  const ids = openRows().map(x=>x.dataset.id), r = d.el.getBoundingClientRect();
+  d.float.classList.add("landing"); d.float.style.left = r.left+"px"; d.float.style.top = r.top+"px";
+  setTimeout(()=>{
+    d.float.remove(); d.el.classList.remove("todo-ph"); document.body.classList.remove("todo-dragging");
+    openRows().forEach(x=>{ x.style.transition=""; x.style.transform=""; });
+    placeTodo(d.id, ids);
+  }, 160);
+}
+document.addEventListener("pointerup", endTodoDrag);
+document.addEventListener("pointercancel", endTodoDrag);
+// A drag that ends on the label must not also tick the checkbox.
+document.addEventListener("click", e => { if(Date.now()-tdragEnded < 300 && e.target.closest("#todo-list")){ e.preventDefault(); e.stopPropagation(); } }, true);
 $("#todo-list").addEventListener("keydown", e => {
   const id = e.target.dataset?.grip; if(!id || (e.key!=="ArrowUp" && e.key!=="ArrowDown")) return;
   e.preventDefault(); const ids = openTodoIds(), i = ids.indexOf(id), j = i + (e.key==="ArrowUp"?-1:1);
