@@ -108,6 +108,10 @@ table.plist{width:100%;border-collapse:collapse;min-width:860px}
 .status{font-size:13px;font-weight:600;padding:4px 11px;border-radius:999px;white-space:nowrap;color:var(--on-brand)}
 .status.active{background:var(--cyan)}
 .status.upcoming{background:var(--yellow)}
+.status.ended{background:var(--line-soft);color:var(--muted)}
+.plist tr.ended td{color:var(--muted)}
+.plist tr.ended .pname{color:var(--muted)}
+.plist-foot{display:flex;justify-content:space-between;align-items:center;padding:14px 28px;border-top:1px solid var(--line-soft);font-size:14px;color:var(--faint)}
 
 /* Timeline */
 .tl{min-width:960px;padding-bottom:8px}
@@ -261,6 +265,21 @@ body.todo-dragging,body.todo-dragging *{cursor:grabbing!important}
 .check input{width:20px;height:20px;accent-color:var(--btn-dark);margin-top:2px;flex:none}
 .check b{display:flex;align-items:center;gap:6px}
 .check small{display:block;color:var(--muted);font-size:14px}
+.tick{display:inline-flex;align-items:center;gap:8px;cursor:pointer;align-self:flex-start}
+.tick input{width:16px;height:16px;margin:0;accent-color:var(--btn-dark);cursor:pointer}
+.tick .lock{width:13px;height:13px}
+/* Rich-text notes: a contenteditable box with a small toolbar */
+.rte{border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.rte:focus-within{border-color:var(--faint)}
+.rte-bar{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--line-soft)}
+.rte-bar button{border:0;background:transparent;width:34px;height:30px;border-radius:8px;color:var(--muted);font-size:15px;display:grid;place-items:center}
+.rte-bar button:hover{background:var(--sunk);color:var(--ink)}
+.rte-bar button[aria-pressed="true"]{background:var(--line-soft);color:var(--ink)}
+.rte-bar svg{width:18px;height:18px}
+.rte-body{min-height:140px;padding:11px 14px;font-size:16px;overflow-wrap:anywhere}
+.rte-body:focus,.rte-body:focus-visible{outline:none}
+.rte-body:empty::before{content:attr(data-ph);color:var(--faint)}
+.rte-body ul,.rte-body ol{margin:4px 0;padding-left:24px}
 .colors{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .colors button{width:34px;height:34px;border-radius:10px;border:2px solid transparent;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
 .colors button[aria-pressed="true"]{border-color:var(--ink)}
@@ -353,7 +372,7 @@ const LOCK = `<svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentC
 const STAR = `<svg class="star" viewBox="0 0 24 24" role="img" aria-label="Lead"><title>Lead</title><path fill="currentColor" d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9-4.4-4.1 6-.7z"/></svg>`;
 let S = {people:{},projects:{},todos:{},allocs:{},holidays:{}};
 let db = null, mode = "loading";
-const ui = { pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null, demo:false, collapsed:[] };
+const ui = { showEnded:false, pview:"list", resWeeks:2, calStart:null, resWeek:null, theme:"light", jump:null, demo:false, collapsed:[] };
 try{ const s = JSON.parse(localStorage.getItem("ddd-ui")||"{}"); ["pview","resWeeks","theme","demo","collapsed"].forEach(k=>{ if(s[k]!=null) ui[k]=s[k]; }); }catch(e){}
 const saveUI = () => { try{ localStorage.setItem("ddd-ui", JSON.stringify({pview:ui.pview,resWeeks:ui.resWeeks,theme:ui.theme,demo:ui.demo,collapsed:ui.collapsed})); }catch(e){} };
 
@@ -406,6 +425,23 @@ function sc(s){
   return demoCache.get(s);
 }
 const tx = s => esc(sc(s));
+/* Project notes are stored as HTML. Only these tags survive, with no attributes;
+   everything else is unwrapped to its text. */
+const NOTE_TAGS = {B:"b",STRONG:"b",I:"i",EM:"i",U:"u",UL:"ul",OL:"ol",LI:"li",BR:"br",P:"div",DIV:"div"};
+function cleanNotes(html, scramble){
+  const t = document.createElement("template"); t.innerHTML = String(html||"");
+  const out = document.createElement("div");
+  const walk = (from, to) => { for(const n of from.childNodes){
+    if(n.nodeType===3) to.append(scramble ? sc(n.nodeValue) : n.nodeValue);
+    else if(n.nodeType===1 && !["SCRIPT","STYLE","TEMPLATE"].includes(n.tagName)){
+      const tag = NOTE_TAGS[n.tagName];
+      if(!tag){ walk(n, to); continue; }
+      const el = document.createElement(tag); to.append(el); if(tag!=="br") walk(n, el);
+    }
+  } };
+  walk(t.content, out);
+  return out.textContent.trim() ? out.innerHTML : "";
+}
 const rid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
 const $ = (s,el=document) => el.querySelector(s);
 const fmtD = n => { if(!n) return "0"; const r = Math.round(n*100)/100; return r%1===0 ? r.toFixed(0) : String(r); };
@@ -425,8 +461,13 @@ const holApplies = (h, pid) => !(h.skip||[]).includes(pid);
 const holidayOn = (date, pid) => holidays().find(h=>date>=h.date && date<=holEnd(h) && holApplies(h, pid));
 const holRange = h => holEnd(h)===h.date ? fmtY(h.date) : `${fmt(h.date)} – ${fmtY(holEnd(h))}`;
 const liveProjects = () => projects().filter(p => !(p.end && p.end < TODAY));
+// Ended projects stay in the data. The list can show the last few months of them;
+// the timeline and month views show any project whose dates are on screen.
+const ARCHIVE_DAYS = 92;
+const recentlyEnded = () => projects().filter(p => p.end && p.end < TODAY && p.end >= add(TODAY, -ARCHIVE_DAYS)).sort((a,b)=>b.end.localeCompare(a.end));
 const personName = id => S.people[id] ? sc(S.people[id].name) : "Unassigned";
-const status = p => (p.start && p.start > TODAY) ? "upcoming" : "active";
+const status = p => (p.end && p.end < TODAY) ? "ended" : (p.start && p.start > TODAY) ? "upcoming" : "active";
+const STATUS_LABEL = {active:"Active", upcoming:"Upcoming", ended:"Ended"};
 const pTitle = p => `${tx(p.name||"Untitled")}${p.ultra?" "+LOCK:""}`;
 
 /* ---------- storage ---------- */
@@ -537,8 +578,10 @@ function renderProjects(){
       <span class="spacer"></span>${cal ? dateNav("cal", start, end) : month ? monthNav() : ""}
       <button class="btn dark" data-act="new-project">+ New project</button></div>`;
   if(month) return head + projectMonth();
-  if(!list.length) return head + `<div class="panel empty"><b>No current projects</b>Add one with “New project”. Finished projects drop off on their own.</div>`;
-  return head + (cal ? projectCal(list) : projectList(list));
+  if(cal) return head + projectCal();
+  const ended = recentlyEnded();
+  if(!list.length && !ended.length) return head + `<div class="panel empty"><b>No current projects</b>Add one with “New project”. Finished projects move out of this list; scroll back in the timeline or month view to find them.</div>`;
+  return head + projectList(list, ended);
 }
 const SEA = ["SG","MY","ID","VN","TH","PH"];
 function mktList(ms){
@@ -548,21 +591,23 @@ function mktList(ms){
   out.splice(i<0?out.length:i, 0, "SEA"); return out;
 }
 function mktChips(ms){ return `<div class="mkts">${mktList(ms).map(m=>`<span class="chip">${m}</span>`).join("")}</div>`; }
-function projectList(list){
-  return `<div class="panel scroll-x"><table class="plist">
+function projectList(list, ended){
+  const rows = ui.showEnded ? [...list, ...ended] : list;
+  const foot = ended.length ? `<div class="plist-foot"><span>${ended.length} ended in the last 3 months</span><button class="btn ghost small" data-act="show-ended">${ui.showEnded?"Hide":"Show"}</button></div>` : "";
+  return `<div class="panel"><div class="scroll-x"><table class="plist">
     <thead><tr><th>Project</th><th>Lead</th><th>Markets</th><th>Dates</th><th>Scope</th></tr></thead>
-    <tbody>${list.map(p=>{
+    <tbody>${rows.length ? "" : `<tr><td colspan="5" class="empty" style="cursor:default">No current projects.</td></tr>`}${rows.map(p=>{
       const st = status(p); const len = diff(p.start,p.end)+1;
       const dur = len>=14 ? `${Math.round(len/7)} weeks` : `${len} days`;
-      return `<tr data-act="edit" data-id="${p.id}" tabindex="0">
-        <td><div class="pname"><span class="swatch" style="background:${esc(p.color)}"></span>${pTitle(p)}<span class="status ${st}">${st==="active"?"Active":"Upcoming"}</span></div></td>
+      return `<tr data-act="edit" data-id="${p.id}" tabindex="0"${st==="ended"?` class="ended"`:""}>
+        <td><div class="pname"><span class="swatch" style="background:${esc(p.color)}"></span>${pTitle(p)}<span class="status ${st}">${STATUS_LABEL[st]}</span></div></td>
         <td>${esc(personName(p.leadId))}</td>
         <td>${mktChips(p.markets)}</td>
         <td class="date">${fmt(p.start)} – ${fmt(p.end)}<small>${dur}</small></td>
         <td><div class="scope">${tx(p.scope||"")}</div></td>
-      </tr>`; }).join("")}</tbody></table></div>`;
+      </tr>`; }).join("")}</tbody></table></div>${foot}</div>`;
 }
-function projectCal(list){
+function projectCal(){
   const start = ui.calStart, total = CAL_WEEKS*7, end = add(start, total-1);
   const pct = d => diff(start,d)/total*100;
   let months = "", weeks = "", grid = "";
@@ -578,14 +623,15 @@ function projectCal(list){
   }
   for(let d=add(start,5); d<=end; d=add(d,7)) grid += `<div class="weekend" style="left:${pct(d)}%;width:${2/total*100}%"></div>`;
   const todayLine = (TODAY>=start && TODAY<=end) ? `<div class="today" style="left:${pct(TODAY)+0.5/total*100}%"></div>` : "";
-  const rows = list.filter(p=>p.end>=start).map(p=>{
+  // Current and upcoming projects, plus any ended project whose dates are in view.
+  const rows = projects().filter(p=>p.end>=start && (p.end>=TODAY || p.start<=end)).map(p=>{
     let bar = "";
     if(p.start && p.end && p.end>=start && p.start<=end){
       const s = p.start<start?start:p.start, e = p.end>end?end:p.end;
       const cl = (p.start<start?" clip-l":"")+(p.end>end?" clip-r":"");
       bar = `<div class="bar${cl}" data-bar="${p.id}" style="left:${pct(s)}%;width:${(diff(s,e)+1)/total*100}%;background:${esc(p.color)}" title="${tx(p.name)} · ${fmtY(p.start)} – ${fmtY(p.end)}"><span class="h l" data-h="l"></span>${tx(p.name)}${p.ultra?LOCK:""}<span class="h r" data-h="r"></span></div>`;
     }
-    return `<div class="tl-row"><div class="lbl" data-act="edit" data-id="${p.id}"><b>${pTitle(p)}</b><small>${esc(personName(p.leadId))}${(p.markets||[]).length?" · "+mktList(p.markets).join(" "):""}</small></div><div class="track" data-track>${grid}${todayLine}${bar}</div></div>`;
+    return `<div class="tl-row"><div class="lbl" data-act="edit" data-id="${p.id}"><b>${pTitle(p)}</b><small>${status(p)==="ended"?"Ended · ":""}${esc(personName(p.leadId))}${(p.markets||[]).length?" · "+mktList(p.markets).join(" "):""}</small></div><div class="track" data-track>${grid}${todayLine}${bar}</div></div>`;
   }).join("");
   return `<div class="panel scroll-x"><div class="tl" data-total="${total}" data-start="${start}">
       <div class="tl-head"><div class="lbl"></div><div><div class="tl-months">${months}</div><div class="tl-weeks">${weeks}</div></div></div>
@@ -692,7 +738,7 @@ function drawEditor(){
     <header><h2 id="ed-title">${id?"Edit project":"New project"}</h2><button class="btn ghost" data-act="close" aria-label="Close">✕</button></header>
     <div class="body">
       <div class="field"><label class="label" for="f-name">Project name</label><input class="input" id="f-name" value="${tx(p.name)}" placeholder="e.g. 11.11 campaign site"></div>
-      <label class="check" for="f-ultra"><input type="checkbox" id="f-ultra" ${p.ultra?"checked":""}><span><b>Ultra ${LOCK}</b></span></label>
+      <label class="tick" for="f-ultra"><input type="checkbox" id="f-ultra" ${p.ultra?"checked":""}><span class="label">Ultra</span>${LOCK}</label>
       <div class="two">
         <div class="field"><label class="label" for="f-start">Start</label><input class="input" type="date" id="f-start" value="${esc(p.start)}"></div>
         <div class="field"><label class="label" for="f-end">End</label><input class="input" type="date" id="f-end" value="${esc(p.end)}"></div>
@@ -703,6 +749,15 @@ function drawEditor(){
       </div>
       <div class="field"><span class="label">Markets</span><div class="mkt-pick" id="f-mkts">${MARKETS.map(m=>`<button type="button" data-m="${m}" aria-pressed="${(p.markets||[]).includes(m)}">${m}</button>`).join("")}<button type="button" data-m="__all" aria-pressed="false">All</button></div></div>
       <div class="field"><label class="label" for="f-scope">Scope</label><textarea class="input" id="f-scope" rows="5" placeholder="Deliverables, channels, what's in and out">${tx(p.scope)}</textarea></div>
+      <div class="field"><span class="label" id="f-notes-l">Notes</span><div class="rte">
+        <div class="rte-bar" role="toolbar" aria-label="Formatting">
+          <button type="button" data-rte="bold" aria-pressed="false" aria-label="Bold" title="Bold (⌘B)"><b>B</b></button>
+          <button type="button" data-rte="italic" aria-pressed="false" aria-label="Italic" title="Italic (⌘I)"><i style="font-family:Georgia,serif">I</i></button>
+          <button type="button" data-rte="underline" aria-pressed="false" aria-label="Underline" title="Underline (⌘U)"><u>U</u></button>
+          <button type="button" data-rte="insertUnorderedList" aria-pressed="false" aria-label="Bullet list" title="Bullet list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+        </div>
+        <div class="rte-body" id="f-notes" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="f-notes-l" data-ph="Anything worth remembering about this project">${cleanNotes(p.notes, true)}</div>
+      </div></div>
       <div class="field"><span class="label">Bar colour</span><div class="colors" id="f-colors">${PALETTE.map(c=>`<button type="button" data-c="${c}" style="background:${c}" aria-pressed="${(p.color||"").toUpperCase()===c}" aria-label="Colour ${c}"></button>`).join("")}<input type="color" id="f-color" value="${esc((p.color||"#FF4FA3").toLowerCase())}" aria-label="Custom colour"></div></div>
     </div>
     <footer>
@@ -714,7 +769,21 @@ function drawEditor(){
   </aside>`;
   setTimeout(()=>$("#f-name")?.focus(), 30);
 }
-function readEditor(){ const p = ed.p; p.name=$("#f-name").value.trim(); p.start=$("#f-start").value; p.end=$("#f-end").value; p.scope=$("#f-scope").value; p.ultra=$("#f-ultra").checked; return p; }
+function readEditor(){ const p = ed.p; p.name=$("#f-name").value.trim(); p.start=$("#f-start").value; p.end=$("#f-end").value; p.scope=$("#f-scope").value; p.notes=cleanNotes($("#f-notes").innerHTML); p.ultra=$("#f-ultra").checked; return p; }
+// Notes toolbar: mousedown keeps the selection in the notes box; click applies the format.
+function syncRte(){ document.querySelectorAll("[data-rte]").forEach(b=>{ let on=false; try{ on=document.queryCommandState(b.dataset.rte); }catch(e){} b.setAttribute("aria-pressed", String(on)); }); }
+$("#overlay").addEventListener("mousedown", e => { if(e.target.closest("[data-rte]")) e.preventDefault(); });
+$("#overlay").addEventListener("click", e => {
+  const b = e.target.closest("[data-rte]"); if(!b) return;
+  $("#f-notes").focus(); document.execCommand(b.dataset.rte, false, null); syncRte();
+});
+document.addEventListener("selectionchange", () => { const n = $("#f-notes"); if(n && n.contains(document.getSelection()?.anchorNode)) syncRte(); });
+$("#overlay").addEventListener("paste", e => {
+  if(!e.target.closest("#f-notes")) return; e.preventDefault();
+  const html = e.clipboardData.getData("text/html");
+  if(html) document.execCommand("insertHTML", false, cleanNotes(html));
+  else document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+});
 
 /* ---------- settings (side panel) ---------- */
 let pdelArm = null;
@@ -786,7 +855,7 @@ $("#overlay").addEventListener("click", e => {
     else p.leadId = lv;
     const id = ed.id || rid(); const prevLead = ed.id ? S.projects[ed.id]?.leadId : "";
     closeOverlay();
-    put("projects", id, {name:p.name,start:p.start,end:p.end,scope:p.scope||"",leadId:p.leadId||"",markets:p.markets||[],color:p.color||nextColor(),ultra:!!p.ultra});
+    put("projects", id, {name:p.name,start:p.start,end:p.end,scope:p.scope||"",notes:p.notes||"",leadId:p.leadId||"",markets:p.markets||[],color:p.color||nextColor(),ultra:!!p.ultra});
     // A new lead starts with a quarter day on every weekday of the project, skipping their holidays.
     const lk = `${p.leadId}__${id}`;
     if(p.leadId && p.leadId!==prevLead && !S.allocs[lk]){
@@ -1105,6 +1174,7 @@ document.querySelector("main").addEventListener("click", e => {
   switch(a){
     case "pview": ui.pview=v; ui.jump=null; saveUI(); render(); break;
     case "new-project": openEditor(null); break;
+    case "show-ended": ui.showEnded=!ui.showEnded; render(); break;
     case "edit": openEditor(t.dataset.id); break;
     case "cal-prev": ui.calStart=add(ui.calStart,-28); render(); break;
     case "cal-next": ui.calStart=add(ui.calStart,28); render(); break;
