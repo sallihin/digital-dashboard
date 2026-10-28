@@ -624,8 +624,8 @@ function projectCal(){
   }
   for(let d=add(start,5); d<=end; d=add(d,7)) grid += `<div class="weekend" style="left:${pct(d)}%;width:${2/total*100}%"></div>`;
   const todayLine = (TODAY>=start && TODAY<=end) ? `<div class="today" style="left:${pct(TODAY)+0.5/total*100}%"></div>` : "";
-  // Current and upcoming projects, plus any ended project whose dates are in view.
-  const rows = projects().filter(p=>p.end>=start && (p.end>=TODAY || p.start<=end)).map(p=>{
+  // Only projects whose dates overlap the weeks in view; the List view still shows them all.
+  const rows = projects().filter(p=>p.end>=start && p.start<=end).map(p=>{
     let bar = "";
     if(p.start && p.end && p.end>=start && p.start<=end){
       const s = p.start<start?start:p.start, e = p.end>end?end:p.end;
